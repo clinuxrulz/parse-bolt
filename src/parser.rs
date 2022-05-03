@@ -445,21 +445,12 @@ impl<Err,T,A> Parser2<Err,T,A> {
         }
     }
 
-    pub fn run_str(&self, str: &str) -> Result<A,Err> where T: From<char>, {
-        let tokens: Vec<T> = str.chars().map(Into::into).collect();
-        let mut token_stream = TokenStream {
-            tokens: tokens,
-            pos: 0,
-        };
-        let generator = self.base.into_generator::<Err, A>();
-        match generator.resume(&mut token_stream) {
-            GeneratorState::Yielded(r, _) => {
-                return Ok(r);
-            }
-            GeneratorState::Complete(r) => {
-                return r;
-            }
-        }
+    pub fn run_str(&self, str: &str) -> Result<A,Err> where Err: From<String> + 'static, T: Clone + From<char> + Into<char> + std::fmt::Display + 'static, A: 'static {
+        let parser: Parser<Err, T, A> = self.base.into_any_parser().map(|x| {
+            let x: Box<A> = x.downcast().ok().unwrap();
+            *x
+        });
+        return parser.run_str(str);
     }
 
     pub fn map<B,F:FnMut(A)->B+'static>(&self, mut f: F) -> Parser2<Err,T,B> where A: 'static, B: 'static {
@@ -521,8 +512,35 @@ enum ParserBase2<T> {
 }
 
 impl<T> ParserBase2<T> {
-    fn into_generator<Err,A>(&self) -> Box<dyn Generator<TokenStream<T>, Yield = A, Result = Result<A, Err>>> {
-        todo!();
+    fn into_any_parser<Err: From<String> + 'static>(&self) -> Parser<Err,T,Box<dyn Any>> where T: Clone + Into<char> + std::fmt::Display + 'static {
+        fn parser_to_parser_any<Err: From<String> + 'static, T: Clone + 'static, A: 'static>(parser: Parser<Err,T,A>) -> Parser<Err,T,Box<dyn Any>> {
+            parser.map(|x| Box::new(x) as Box<dyn Any>)
+        }
+        match self {
+            &ParserBase2::EmptyParser => parser_to_parser_any(Parser::empty()),
+            &ParserBase2::SatisfyParser(ref pred) => {
+                let pred = Rc::clone(pred);
+                let pred = move |t: &T| pred.borrow_mut()(t);
+                parser_to_parser_any(Parser::satisfy(pred))
+            },
+            &ParserBase2::MatchStringParser(ref clone_t, ref t_to_char, ref str) => {
+                let str: String = str.iter().collect();
+                parser_to_parser_any(Parser::match_string(&str))
+            },
+            &ParserBase2::EofParser => parser_to_parser_any(Parser::eof()),
+            &ParserBase2::MapParser(ref parser, ref f) => {
+                let parser = parser.into_any_parser();
+                let f = Rc::clone(f);
+                let f = move |a| f.borrow_mut()(a);
+                parser_to_parser_any(parser.map(f))
+            },
+            &ParserBase2::FlatMapParser(ref parser, ref cont) => {
+                let parser = parser.into_any_parser();
+                let cont = Rc::clone(cont);
+                let cont = move |a| cont.borrow_mut()(a).into_any_parser();
+                parser_to_parser_any(parser.flat_map(cont))
+            },
+        }
     }
 }
 
