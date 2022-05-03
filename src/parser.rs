@@ -733,7 +733,7 @@ impl<Err, T, A> Parser2<Err, T, A> {
     pub fn filter<Pred: FnMut(&A) -> bool + 'static>(
         &self,
         mut pred: Pred,
-        error: Err,
+        _error: Err,
     ) -> Parser2<Err, T, A>
     where
         Err: Clone + 'static,
@@ -837,7 +837,7 @@ impl<T> ParserBase2<T> {
                 let pred = move |t: &T| pred.borrow_mut()(t);
                 parser_to_parser_any(Parser::satisfy(pred))
             }
-            &ParserBase2::MatchStringParser(ref clone_t, ref t_to_char, ref str) => {
+            &ParserBase2::MatchStringParser(ref _clone_t, ref _t_to_char, ref str) => {
                 let str: String = str.iter().collect();
                 parser_to_parser_any(Parser::match_string(&str))
             }
