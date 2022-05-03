@@ -164,7 +164,7 @@ impl<T> ParserByteCodeInterpretter<T> {
         let mut at_line = 0;
         loop {
             let instructions = &self.parser_byte_code.functions[&at_function];
-            if at_line >= instructions.len() {
+            if at_line >= instructions.instructions.len() {
                 break;
             }
             for line in at_line..instructions.instructions.len() {
