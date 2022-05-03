@@ -445,7 +445,7 @@ impl<Err,T,A> Parser2<Err,T,A> {
         }
     }
 
-    pub fn run_str(&self, str: &str) -> Result<A,Err> where Err: From<String> + 'static, T: Clone + From<char> + Into<char> + std::fmt::Display + 'static, A: 'static {
+    pub fn run_str(&self, str: &str) -> Result<A,Err> where Err: Clone + From<String> + 'static, T: Clone + From<char> + Into<char> + std::fmt::Display + 'static, A: 'static {
         let parser: Parser<Err, T, A> = self.base.into_any_parser().map(|x| {
             let x: Box<A> = x.downcast().ok().unwrap();
             *x
@@ -478,6 +478,14 @@ impl<Err,T,A> Parser2<Err,T,A> {
             }
             _ => Parser2::wrap_base(ParserBase2::FlatMapParser(Rc::clone(&self.base), cont)),
         }
+    }
+
+    pub fn choice(parsers: Vec<Parser2<Err,T,A>>) -> Parser2<Err,T,A> {
+        Parser2::wrap_base(ParserBase2::OrderedChoice(parsers.iter().map(|x| Rc::clone(&x.base)).collect()))
+    }
+
+    pub fn unordered_choice(parsers: Vec<Parser2<Err,T,A>>) -> Parser2<Err,T,A> {
+        Parser2::wrap_base(ParserBase2::UnorderedChoice(parsers.iter().map(|x| Rc::clone(&x.base)).collect()))
     }
 
     pub fn return_string(&self) -> Parser2<Err,T,String> {
@@ -513,11 +521,13 @@ enum ParserBase2<T> {
     EofParser,
     MapParser(Rc<ParserBase2<T>>,Rc<RefCell<dyn FnMut(Box<dyn Any>)->Box<dyn Any>>>),
     FlatMapParser(Rc<ParserBase2<T>>,Rc<RefCell<dyn FnMut(Box<dyn Any>)->Rc<ParserBase2<T>>>>),
+    OrderedChoice(Vec<Rc<ParserBase2<T>>>),
+    UnorderedChoice(Vec<Rc<ParserBase2<T>>>),
     ReturnString(Rc<ParserBase2<T>>),
 }
 
 impl<T> ParserBase2<T> {
-    fn into_any_parser<Err: From<String> + 'static>(&self) -> Parser<Err,T,Box<dyn Any>> where T: Clone + Into<char> + std::fmt::Display + 'static {
+    fn into_any_parser<Err: Clone + From<String> + 'static>(&self) -> Parser<Err,T,Box<dyn Any>> where T: Clone + Into<char> + std::fmt::Display + 'static {
         fn parser_to_parser_any<Err: From<String> + 'static, T: Clone + 'static, A: 'static>(parser: Parser<Err,T,A>) -> Parser<Err,T,Box<dyn Any>> {
             parser.map(|x| Box::new(x) as Box<dyn Any>)
         }
@@ -545,6 +555,10 @@ impl<T> ParserBase2<T> {
                 let cont = move |a| cont.borrow_mut()(a).into_any_parser();
                 parser_to_parser_any(parser.flat_map(cont))
             },
+            &ParserBase2::OrderedChoice(ref parsers) =>
+                Parser::choice(parsers.iter().map(|parser| parser.into_any_parser()).collect()),
+            &ParserBase2::UnorderedChoice(ref parsers) =>
+                Parser::unordered_choice(parsers.iter().map(|parser| parser.into_any_parser()).collect()),
             &ParserBase2::ReturnString(ref parser) => parser_to_parser_any(Parser::return_string(&parser.into_any_parser())),
         }
     }
