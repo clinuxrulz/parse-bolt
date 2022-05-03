@@ -3,9 +3,11 @@
 pub mod adt;
 pub mod kotlin;
 mod parser;
+mod parser_byte_code;
 pub mod python;
 mod test;
 
+pub use self::parser::TokenStream;
 pub use self::parser::Parser;
 pub use self::parser::Parser2 as ExperimentalParser;
 

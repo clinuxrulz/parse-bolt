@@ -3,13 +3,13 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-struct TokenStream<T> {
+pub struct TokenStream<T> {
     tokens: Vec<T>,
     pos: usize,
 }
 
 impl<T> TokenStream<T> {
-    fn read(&mut self) -> Option<T>
+    pub fn read(&mut self) -> Option<T>
     where
         T: Clone,
     {
@@ -21,12 +21,21 @@ impl<T> TokenStream<T> {
         return Some(t);
     }
 
-    fn save(&mut self) -> usize {
+    pub fn save(&mut self) -> usize {
         self.pos
     }
 
-    fn restore(&mut self, at: usize) {
+    pub fn restore(&mut self, at: usize) {
         self.pos = at;
+    }
+}
+
+impl TokenStream<char> {
+    pub fn from_str(str: &str) -> TokenStream<char> {
+        TokenStream {
+            tokens: str.chars().collect(),
+            pos: 0,
+        }
     }
 }
 
