@@ -164,6 +164,9 @@ impl<T> ParserByteCodeInterpretter<T> {
         let mut at_line = 0;
         loop {
             let instructions = &self.parser_byte_code.functions[&at_function];
+            if at_line >= instructions.len() {
+                break;
+            }
             for line in at_line..instructions.instructions.len() {
                 let instruction = &instructions.instructions[line];
                 match instruction {
@@ -266,7 +269,6 @@ fn test_parser_byte_code() {
         ctx.match_string("Test");
     });
     parser_byte_code.set_entry(function);
-    let instructions = &parser_byte_code.functions[&function];
     let mut interpretter = ParserByteCodeInterpretter::new(parser_byte_code);
     let mut token_stream = TokenStream::from_str("Test");
     interpretter.execute(&mut token_stream);
