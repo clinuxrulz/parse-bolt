@@ -265,6 +265,7 @@ fn test_parser_byte_code() {
     let function = parser_byte_code.define_func(|ctx| {
         ctx.match_string("Test");
     });
+    parser_byte_code.set_entry(function);
     let instructions = &parser_byte_code.functions[&function];
     let mut interpretter = ParserByteCodeInterpretter::new(parser_byte_code);
     let mut token_stream = TokenStream::from_str("Test");
