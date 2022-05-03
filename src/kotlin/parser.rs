@@ -1,7 +1,7 @@
 // https://kotlinlang.org/docs/reference/grammar.html
 use super::super::choice_lazy;
-use super::super::Parser;
 use super::super::kotlin;
+use super::super::Parser;
 use super::data;
 use super::lexer;
 
@@ -927,8 +927,10 @@ pub fn class_declaration() -> Parser<String, char, data::ClassDeclaration> {
                             &lexer::seq2_skip_ws_nl(
                                 &type_constraints().optional(),
                                 &Parser::choice(vec![
-                                    Parser::lazy(class_body).map(data::ClassDeclaration3::ClassBody),
-                                    Parser::lazy(enum_class_body).map(data::ClassDeclaration3::EnumClassBody),
+                                    Parser::lazy(class_body)
+                                        .map(data::ClassDeclaration3::ClassBody),
+                                    Parser::lazy(enum_class_body)
+                                        .map(data::ClassDeclaration3::EnumClassBody),
                                 ])
                                 .optional(),
                             ),
@@ -1099,26 +1101,23 @@ pub fn enum_class_body() -> Parser<String, char, data::EnumClassBody> {
         &lexer::seq_left_skip_ws_nl(
             &lexer::seq2_skip_ws_nl(
                 &enum_entries().optional(),
-                &lexer::seq_right_skip_ws_nl(
-                    &lexer::semicolon(),
-                    &class_member_declarations(),
-                ).optional(),
+                &lexer::seq_right_skip_ws_nl(&lexer::semicolon(), &class_member_declarations())
+                    .optional(),
             ),
             &lexer::rcurl(),
-        )
+        ),
     )
-    .map(|(enum_entries_op, class_member_declarations_op)| data::EnumClassBody {
-        enum_entries_op,
-        class_member_declarations_op,
-    })
+    .map(
+        |(enum_entries_op, class_member_declarations_op)| data::EnumClassBody {
+            enum_entries_op,
+            class_member_declarations_op,
+        },
+    )
 }
 
 pub fn enum_entries() -> Parser<String, char, data::EnumEntries> {
     lexer::seq_left_skip_ws_nl(
-        &lexer::one_or_more_sep_by_skip_ws_nl(
-            &enum_entry(),
-            &lexer::comma(),
-        ),
+        &lexer::one_or_more_sep_by_skip_ws_nl(&enum_entry(), &lexer::comma()),
         &lexer::comma().optional(),
     )
     .map(data::EnumEntries)
@@ -1129,34 +1128,32 @@ pub fn enum_entry() -> Parser<String, char, data::EnumEntry> {
         &modifiers().optional(),
         &lexer::seq2_skip_ws_nl(
             &simple_identifier(),
-            &lexer::seq2_skip_ws_nl(
-                &value_arguments().optional(),
-                &class_body().optional(),
-            )
-        )
+            &lexer::seq2_skip_ws_nl(&value_arguments().optional(), &class_body().optional()),
+        ),
     )
-    .map(|(modifiers_op, (simple_identifier, (value_arguments_op, class_body_op)))| {
-        data::EnumEntry {
-            modifiers_op,
-            simple_identifier,
-            value_arguments_op,
-            class_body_op,
-        }
-    })
+    .map(
+        |(modifiers_op, (simple_identifier, (value_arguments_op, class_body_op)))| {
+            data::EnumEntry {
+                modifiers_op,
+                simple_identifier,
+                value_arguments_op,
+                class_body_op,
+            }
+        },
+    )
 }
 
 pub fn primary_constructor() -> Parser<String, char, data::PrimaryConstructor> {
     lexer::seq2_skip_ws_nl(
-        &lexer::seq_left_skip_ws_nl(
-            &modifiers(),
-            &lexer::constructor(),
-        ).optional(),
+        &lexer::seq_left_skip_ws_nl(&modifiers(), &lexer::constructor()).optional(),
         &class_parameters(),
     )
-    .map(|(modifiers_op, class_parameters)| data::PrimaryConstructor {
-        modifiers_op,
-        class_parameters,
-    })
+    .map(
+        |(modifiers_op, class_parameters)| data::PrimaryConstructor {
+            modifiers_op,
+            class_parameters,
+        },
+    )
 }
 
 pub fn class_parameters() -> Parser<String, char, data::ClassParameters> {
@@ -1164,10 +1161,7 @@ pub fn class_parameters() -> Parser<String, char, data::ClassParameters> {
         &lexer::lparen(),
         &lexer::seq_left_skip_ws_nl(
             &lexer::seq_left_skip_ws_nl(
-                &lexer::zero_or_more_sep_by_skip_ws_nl(
-                    &class_parameter(),
-                    &lexer::comma(),
-                ),
+                &lexer::zero_or_more_sep_by_skip_ws_nl(&class_parameter(), &lexer::comma()),
                 &lexer::comma().optional(),
             ),
             &lexer::rparen(),
@@ -1193,21 +1187,25 @@ pub fn class_parameter() -> Parser<String, char, data::ClassParameter> {
                         &Parser::lazy(type_),
                         &lexer::seq_right_skip_ws_nl(
                             &lexer::assignment(),
-                            &Parser::lazy(expression)
+                            &Parser::lazy(expression),
                         )
-                        .optional()
-                    )
-                )
-            )
-        )
+                        .optional(),
+                    ),
+                ),
+            ),
+        ),
     )
-    .map(|(modifiers_op, (val_or_var_op, (simple_identifier, (type_, expression_op))))| data::ClassParameter {
-        modifiers_op,
-        val_or_var_op,
-        simple_identifier,
-        type_: type_,
-        expression_op,
-    })
+    .map(
+        |(modifiers_op, (val_or_var_op, (simple_identifier, (type_, expression_op))))| {
+            data::ClassParameter {
+                modifiers_op,
+                val_or_var_op,
+                simple_identifier,
+                type_: type_,
+                expression_op,
+            }
+        },
+    )
 }
 
 pub fn object_declaration() -> Parser<String, char, data::ObjectDeclaration> {

@@ -1,7 +1,7 @@
 #[cfg(test)]
-use super::super::Parser;
-#[cfg(test)]
 use super::super::python;
+#[cfg(test)]
+use super::super::Parser;
 
 #[test]
 fn python_idented_block_test() {
@@ -15,10 +15,7 @@ fn python_idented_block_test() {
     3
 "#;
     let r = parser.run_str(input);
-    assert_eq!(
-        r,
-        Ok(vec!["1".to_owned(), "2".to_owned(), "3".to_owned()])
-    )
+    assert_eq!(r, Ok(vec!["1".to_owned(), "2".to_owned(), "3".to_owned()]))
 }
 
 #[test]

@@ -59,7 +59,7 @@ impl<Err, T, A> Parser<Err, T, A> {
     where
         T: From<char>,
     {
-        let str: String = str[index..index+len].iter().collect();
+        let str: String = str[index..index + len].iter().collect();
         let generator = self.base.run();
         let tokens: Vec<T> = str.chars().map(Into::into).collect();
         let mut token_stream = TokenStream {
@@ -218,15 +218,16 @@ impl<Err, T, A> Parser<Err, T, A> {
         T: std::fmt::Display + 'static,
         A: Clone + 'static,
     {
-        self.zero_or_more_vec_rev_greedy(Rc::new(LinkList::Empty)).map(|mut xs| {
-            let mut xs2 = Vec::new();
-            while let &LinkList::Cons(ref x, ref xs3) = &*xs {
-                xs2.push(x.clone());
-                xs = xs3.clone();
-            }
-            xs2.reverse();
-            xs2
-        })
+        self.zero_or_more_vec_rev_greedy(Rc::new(LinkList::Empty))
+            .map(|mut xs| {
+                let mut xs2 = Vec::new();
+                while let &LinkList::Cons(ref x, ref xs3) = &*xs {
+                    xs2.push(x.clone());
+                    xs = xs3.clone();
+                }
+                xs2.reverse();
+                xs2
+            })
     }
 
     #[inline(always)]
@@ -242,7 +243,6 @@ impl<Err, T, A> Parser<Err, T, A> {
         })
     }
 
-
     #[inline(always)]
     pub fn zero_or_more_vec_unordered_choice(&self) -> Parser<Err, T, Vec<A>>
     where
@@ -250,15 +250,16 @@ impl<Err, T, A> Parser<Err, T, A> {
         T: std::fmt::Display + 'static,
         A: Clone + 'static,
     {
-        self.zero_or_more_vec_rev_unordered_choice(Rc::new(LinkList::Empty)).map(|mut xs| {
-            let mut xs2 = Vec::new();
-            while let &LinkList::Cons(ref x, ref xs3) = &*xs {
-                xs2.push(x.clone());
-                xs = xs3.clone();
-            }
-            xs2.reverse();
-            xs2
-        })
+        self.zero_or_more_vec_rev_unordered_choice(Rc::new(LinkList::Empty))
+            .map(|mut xs| {
+                let mut xs2 = Vec::new();
+                while let &LinkList::Cons(ref x, ref xs3) = &*xs {
+                    xs2.push(x.clone());
+                    xs = xs3.clone();
+                }
+                xs2.reverse();
+                xs2
+            })
     }
 
     #[inline(always)]
@@ -268,14 +269,18 @@ impl<Err, T, A> Parser<Err, T, A> {
         T: std::fmt::Display + 'static,
         A: Clone + 'static,
     {
-        self.seq2(&self.zero_or_more_vec_unordered_choice()).map(|(x, mut xs)| {
-            xs.insert(0, x);
-            xs
-        })
+        self.seq2(&self.zero_or_more_vec_unordered_choice())
+            .map(|(x, mut xs)| {
+                xs.insert(0, x);
+                xs
+            })
     }
-    
+
     #[inline(always)]
-    fn zero_or_more_vec_rev_unordered_choice(&self, xs: Rc<LinkList<A>>) -> Parser<Err, T, Rc<LinkList<A>>>
+    fn zero_or_more_vec_rev_unordered_choice(
+        &self,
+        xs: Rc<LinkList<A>>,
+    ) -> Parser<Err, T, Rc<LinkList<A>>>
     where
         Err: Clone + From<String> + 'static,
         T: std::fmt::Display + 'static,
@@ -320,18 +325,31 @@ impl<Err, T, A> Parser<Err, T, A> {
         if n == 0 {
             return Parser::empty().map(|_| Vec::new());
         } else {
-            return Parser::exactly_vec(&self, n - 1).seq2(self).map(|(mut xs, x)| { xs.push(x); xs });
+            return Parser::exactly_vec(&self, n - 1)
+                .seq2(self)
+                .map(|(mut xs, x)| {
+                    xs.push(x);
+                    xs
+                });
         }
     }
 
     #[inline(always)]
-    pub fn filter<Pred:FnMut(&A)->bool + 'static>(&self, pred: Pred, error: Err) -> Parser<Err, T, A>
+    pub fn filter<Pred: FnMut(&A) -> bool + 'static>(
+        &self,
+        pred: Pred,
+        error: Err,
+    ) -> Parser<Err, T, A>
     where
         Err: Clone + 'static,
         T: 'static,
         A: 'static,
     {
-        Parser::wrap_base(FilterParser { parser: self.clone(), pred: Rc::new(RefCell::new(pred)), error, })
+        Parser::wrap_base(FilterParser {
+            parser: self.clone(),
+            pred: Rc::new(RefCell::new(pred)),
+            error,
+        })
     }
 
     #[inline(always)]
@@ -341,7 +359,9 @@ impl<Err, T, A> Parser<Err, T, A> {
         T: Clone + Into<char> + 'static,
         A: 'static,
     {
-        Parser::wrap_base(ReturnStringParser { parser: self.clone(), })
+        Parser::wrap_base(ReturnStringParser {
+            parser: self.clone(),
+        })
     }
 
     #[inline(always)]
@@ -420,13 +440,13 @@ trait ParserBase<Err, T, A> {
     fn run(&self) -> Box<dyn Generator<TokenStream<T>, Yield = A, Result = Result<A, Err>>>;
 }
 
-pub struct Parser2<Err,T,A> {
+pub struct Parser2<Err, T, A> {
     err_phantom: PhantomData<Err>,
     a_phantom: PhantomData<A>,
     base: Rc<ParserBase2<T>>,
 }
 
-impl<Err,T,A> Clone for Parser2<Err,T,A> {
+impl<Err, T, A> Clone for Parser2<Err, T, A> {
     fn clone(&self) -> Self {
         Parser2 {
             err_phantom: PhantomData,
@@ -436,8 +456,8 @@ impl<Err,T,A> Clone for Parser2<Err,T,A> {
     }
 }
 
-impl<Err,T,A> Parser2<Err,T,A> {
-    fn wrap_base(base: ParserBase2<T>) -> Parser2<Err,T,A> {
+impl<Err, T, A> Parser2<Err, T, A> {
+    fn wrap_base(base: ParserBase2<T>) -> Parser2<Err, T, A> {
         Parser2 {
             err_phantom: PhantomData,
             a_phantom: PhantomData,
@@ -445,7 +465,25 @@ impl<Err,T,A> Parser2<Err,T,A> {
         }
     }
 
-    pub fn run_str(&self, str: &str) -> Result<A,Err> where Err: Clone + From<String> + 'static, T: Clone + From<char> + Into<char> + std::fmt::Display + 'static, A: 'static {
+    pub fn run(&self, str: &[char], len: usize, index: usize) -> Result<(A, usize), Err>
+    where
+        Err: Clone + From<String> + 'static,
+        T: Clone + From<char> + Into<char> + std::fmt::Display + 'static,
+        A: 'static,
+    {
+        let parser: Parser<Err, T, A> = self.base.into_any_parser().map(|x| {
+            let x: Box<A> = x.downcast().ok().unwrap();
+            *x
+        });
+        return parser.run(str, len, index);
+    }
+
+    pub fn run_str(&self, str: &str) -> Result<A, Err>
+    where
+        Err: Clone + From<String> + 'static,
+        T: Clone + From<char> + Into<char> + std::fmt::Display + 'static,
+        A: 'static,
+    {
         let parser: Parser<Err, T, A> = self.base.into_any_parser().map(|x| {
             let x: Box<A> = x.downcast().ok().unwrap();
             *x
@@ -453,7 +491,11 @@ impl<Err,T,A> Parser2<Err,T,A> {
         return parser.run_str(str);
     }
 
-    pub fn map<B,F:FnMut(A)->B+'static>(&self, mut f: F) -> Parser2<Err,T,B> where A: 'static, B: 'static {
+    pub fn map<B, F: FnMut(A) -> B + 'static>(&self, mut f: F) -> Parser2<Err, T, B>
+    where
+        A: 'static,
+        B: 'static,
+    {
         let f = Rc::new(RefCell::new(move |a: Box<dyn Any>| {
             let a: A = *a.downcast::<A>().ok().unwrap();
             Box::new(f(a)) as Box<dyn Any>
@@ -461,7 +503,25 @@ impl<Err,T,A> Parser2<Err,T,A> {
         Parser2::wrap_base(ParserBase2::MapParser(Rc::clone(&self.base), f))
     }
 
-    pub fn flat_map<B,Cont:FnMut(A)->Parser2<Err,T,B>+'static>(&self, mut cont: Cont) -> Parser2<Err,T,B> where T: 'static, A: 'static {
+    #[inline(always)]
+    pub fn map_to<B: Clone>(&self, b: B) -> Parser2<Err, T, B>
+    where
+        Err: 'static,
+        T: 'static,
+        A: 'static,
+        B: 'static,
+    {
+        self.map(move |_| b.clone())
+    }
+
+    pub fn flat_map<B, Cont: FnMut(A) -> Parser2<Err, T, B> + 'static>(
+        &self,
+        mut cont: Cont,
+    ) -> Parser2<Err, T, B>
+    where
+        T: 'static,
+        A: 'static,
+    {
         let cont = Rc::new(RefCell::new(move |a: Box<dyn Any>| {
             let a: A = *a.downcast::<A>().ok().unwrap();
             cont(a).base
@@ -469,46 +529,269 @@ impl<Err,T,A> Parser2<Err,T,A> {
         match &*self.base {
             &ParserBase2::FlatMapParser(ref ma, ref k) => {
                 let k = Rc::clone(k);
-                Parser2::wrap_base(
-                    ParserBase2::FlatMapParser(Rc::clone(ma), Rc::new(RefCell::new(move |a| {
+                Parser2::wrap_base(ParserBase2::FlatMapParser(
+                    Rc::clone(ma),
+                    Rc::new(RefCell::new(move |a| {
                         let cont = cont.clone();
                         Rc::new(ParserBase2::FlatMapParser(k.borrow_mut()(a), cont))
-                    })))
-                )
+                    })),
+                ))
             }
             _ => Parser2::wrap_base(ParserBase2::FlatMapParser(Rc::clone(&self.base), cont)),
         }
     }
 
-    pub fn choice(parsers: Vec<Parser2<Err,T,A>>) -> Parser2<Err,T,A> {
-        Parser2::wrap_base(ParserBase2::OrderedChoice(parsers.iter().map(|x| Rc::clone(&x.base)).collect()))
+    pub fn choice(parsers: Vec<Parser2<Err, T, A>>) -> Parser2<Err, T, A> {
+        Parser2::wrap_base(ParserBase2::OrderedChoice(
+            parsers.iter().map(|x| Rc::clone(&x.base)).collect(),
+        ))
     }
 
-    pub fn unordered_choice(parsers: Vec<Parser2<Err,T,A>>) -> Parser2<Err,T,A> {
-        Parser2::wrap_base(ParserBase2::UnorderedChoice(parsers.iter().map(|x| Rc::clone(&x.base)).collect()))
+    pub fn unordered_choice(parsers: Vec<Parser2<Err, T, A>>) -> Parser2<Err, T, A> {
+        Parser2::wrap_base(ParserBase2::UnorderedChoice(
+            parsers.iter().map(|x| Rc::clone(&x.base)).collect(),
+        ))
     }
 
-    pub fn return_string(&self) -> Parser2<Err,T,String> {
+    #[inline(always)]
+    pub fn seq2<B: 'static>(&self, parser2: &Parser2<Err, T, B>) -> Parser2<Err, T, (A, B)>
+    where
+        Err: 'static,
+        T: 'static,
+        A: Clone + 'static,
+    {
+        let parser2 = parser2.clone();
+        self.flat_map(move |a| parser2.map(move |b| (a.clone(), b)))
+    }
+
+    #[inline(always)]
+    pub fn seq_left<B: 'static>(&self, parser2: &Parser2<Err, T, B>) -> Parser2<Err, T, A>
+    where
+        Err: 'static,
+        T: 'static,
+        A: Clone + 'static,
+    {
+        self.seq2(parser2).map(|(a, _)| a)
+    }
+
+    #[inline(always)]
+    pub fn seq_right<B: 'static>(&self, parser2: &Parser2<Err, T, B>) -> Parser2<Err, T, B>
+    where
+        Err: 'static,
+        T: 'static,
+        A: Clone + 'static,
+    {
+        self.seq2(parser2).map(|(_, b)| b)
+    }
+
+    #[inline(always)]
+    pub fn optional(&self) -> Parser2<Err, T, Option<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: 'static,
+    {
+        Parser2::unordered_choice(vec![self.map(Some), Parser2::empty().map(|_| None)])
+    }
+
+    #[inline(always)]
+    pub fn lazy<Unbox: FnMut() -> Parser2<Err, T, A> + 'static>(
+        mut unbox: Unbox,
+    ) -> Parser2<Err, T, A>
+    where
+        Err: From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: 'static,
+    {
+        Parser2::empty().flat_map(move |_| unbox())
+    }
+
+    #[inline(always)]
+    pub fn zero_or_more_vec(&self) -> Parser2<Err, T, Vec<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        self.zero_or_more_vec_rev_greedy(Rc::new(LinkList::Empty))
+            .map(|mut xs| {
+                let mut xs2 = Vec::new();
+                while let &LinkList::Cons(ref x, ref xs3) = &*xs {
+                    xs2.push(x.clone());
+                    xs = xs3.clone();
+                }
+                xs2.reverse();
+                xs2
+            })
+    }
+
+    #[inline(always)]
+    pub fn one_or_more_vec(&self) -> Parser2<Err, T, Vec<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        self.seq2(&self.zero_or_more_vec()).map(|(x, mut xs)| {
+            xs.insert(0, x);
+            xs
+        })
+    }
+
+    #[inline(always)]
+    pub fn zero_or_more_vec_unordered_choice(&self) -> Parser2<Err, T, Vec<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        self.zero_or_more_vec_rev_unordered_choice(Rc::new(LinkList::Empty))
+            .map(|mut xs| {
+                let mut xs2 = Vec::new();
+                while let &LinkList::Cons(ref x, ref xs3) = &*xs {
+                    xs2.push(x.clone());
+                    xs = xs3.clone();
+                }
+                xs2.reverse();
+                xs2
+            })
+    }
+
+    #[inline(always)]
+    pub fn one_or_more_vec_unordered_choice(&self) -> Parser2<Err, T, Vec<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        self.seq2(&self.zero_or_more_vec_unordered_choice())
+            .map(|(x, mut xs)| {
+                xs.insert(0, x);
+                xs
+            })
+    }
+
+    #[inline(always)]
+    fn zero_or_more_vec_rev_unordered_choice(
+        &self,
+        xs: Rc<LinkList<A>>,
+    ) -> Parser2<Err, T, Rc<LinkList<A>>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        let self2 = self.clone();
+        let xs2 = Rc::clone(&xs);
+        Parser2::unordered_choice(vec![
+            self.flat_map(move |x| {
+                let xs2 = Rc::new(LinkList::Cons(x, Rc::clone(&xs)));
+                self2.zero_or_more_vec_rev_unordered_choice(xs2)
+            }),
+            Parser2::empty().map(move |_| Rc::clone(&xs2)),
+        ])
+    }
+
+    #[inline(always)]
+    fn zero_or_more_vec_rev_greedy(&self, xs: Rc<LinkList<A>>) -> Parser2<Err, T, Rc<LinkList<A>>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        let self2 = self.clone();
+        let xs2 = Rc::clone(&xs);
+        Parser2::choice(vec![
+            self.flat_map(move |x| {
+                let xs2 = Rc::new(LinkList::Cons(x, Rc::clone(&xs)));
+                self2.zero_or_more_vec_rev_greedy(xs2)
+            }),
+            Parser2::empty().map(move |_| Rc::clone(&xs2)),
+        ])
+    }
+
+    #[inline(always)]
+    pub fn exactly_vec(&self, n: usize) -> Parser2<Err, T, Vec<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        if n == 0 {
+            return Parser2::empty().map(|_| Vec::new());
+        } else {
+            return Parser2::exactly_vec(&self, n - 1)
+                .seq2(self)
+                .map(|(mut xs, x)| {
+                    xs.push(x);
+                    xs
+                });
+        }
+    }
+
+    #[inline(always)]
+    pub fn filter<Pred: FnMut(&A) -> bool + 'static>(
+        &self,
+        mut pred: Pred,
+        error: Err,
+    ) -> Parser2<Err, T, A>
+    where
+        Err: Clone + 'static,
+        T: 'static,
+        A: 'static,
+    {
+        Parser2::wrap_base(ParserBase2::FilterParser(
+            Rc::clone(&self.base),
+            Rc::new(RefCell::new(move |x: &Box<dyn Any>| {
+                let a = x.downcast_ref::<A>().unwrap();
+                pred(a)
+            })),
+        ))
+    }
+
+    pub fn return_string(&self) -> Parser2<Err, T, String> {
         Parser2::wrap_base(ParserBase2::ReturnString(Rc::clone(&self.base)))
+    }
+
+    pub fn unimplemented() -> Parser2<Err, T, A> {
+        Parser2::wrap_base(ParserBase2::Unimplemented)
     }
 }
 
-impl<Err,T> Parser2<Err,T,()> {
-    pub fn empty() -> Parser2<Err,T,()> {
+impl<Err, T> Parser2<Err, T, ()> {
+    pub fn empty() -> Parser2<Err, T, ()> {
         Parser2::wrap_base(ParserBase2::EmptyParser)
     }
 
-    pub fn eof() -> Parser2<Err,T,()> {
+    pub fn eof() -> Parser2<Err, T, ()> {
         Parser2::wrap_base(ParserBase2::EofParser)
     }
 
-    pub fn match_string(str: &str) -> Parser2<Err,T,()> where T: Clone + Into<char>, {
-        Parser2::wrap_base(ParserBase2::MatchStringParser(Clone::clone, Into::into, str.chars().collect()))
+    pub fn match_string(str: &str) -> Parser2<Err, T, ()>
+    where
+        T: Clone + Into<char>,
+    {
+        Parser2::wrap_base(ParserBase2::MatchStringParser(
+            Clone::clone,
+            Into::into,
+            str.chars().collect(),
+        ))
     }
 }
 
-impl<Err,T> Parser2<Err,T,T> {
-    pub fn satisfy<Pred:FnMut(&T)->bool+'static>(pred: Pred) -> Parser2<Err,T,T> {
+impl<Err, T> Parser2<Err, T, T> {
+    pub fn any() -> Parser2<Err, T, T> {
+        Parser2::satisfy(|_| true)
+    }
+
+    pub fn match_(t: T) -> Parser2<Err, T, T>
+    where
+        T: PartialEq + 'static,
+    {
+        Parser2::satisfy(move |t2| *t2 == t)
+    }
+
+    pub fn satisfy<Pred: FnMut(&T) -> bool + 'static>(pred: Pred) -> Parser2<Err, T, T> {
         let pred = Rc::new(RefCell::new(pred));
         Parser2::wrap_base(ParserBase2::SatisfyParser(pred))
     }
@@ -516,19 +799,35 @@ impl<Err,T> Parser2<Err,T,T> {
 
 enum ParserBase2<T> {
     EmptyParser,
-    SatisfyParser(Rc<RefCell<dyn FnMut(&T)->bool>>),
-    MatchStringParser(fn(&T)->T,fn(T)->char, Vec<char>),
+    SatisfyParser(Rc<RefCell<dyn FnMut(&T) -> bool>>),
+    MatchStringParser(fn(&T) -> T, fn(T) -> char, Vec<char>),
     EofParser,
-    MapParser(Rc<ParserBase2<T>>,Rc<RefCell<dyn FnMut(Box<dyn Any>)->Box<dyn Any>>>),
-    FlatMapParser(Rc<ParserBase2<T>>,Rc<RefCell<dyn FnMut(Box<dyn Any>)->Rc<ParserBase2<T>>>>),
+    MapParser(
+        Rc<ParserBase2<T>>,
+        Rc<RefCell<dyn FnMut(Box<dyn Any>) -> Box<dyn Any>>>,
+    ),
+    FlatMapParser(
+        Rc<ParserBase2<T>>,
+        Rc<RefCell<dyn FnMut(Box<dyn Any>) -> Rc<ParserBase2<T>>>>,
+    ),
     OrderedChoice(Vec<Rc<ParserBase2<T>>>),
     UnorderedChoice(Vec<Rc<ParserBase2<T>>>),
+    FilterParser(
+        Rc<ParserBase2<T>>,
+        Rc<RefCell<dyn FnMut(&Box<dyn Any>) -> bool>>,
+    ),
     ReturnString(Rc<ParserBase2<T>>),
+    Unimplemented,
 }
 
 impl<T> ParserBase2<T> {
-    fn into_any_parser<Err: Clone + From<String> + 'static>(&self) -> Parser<Err,T,Box<dyn Any>> where T: Clone + Into<char> + std::fmt::Display + 'static {
-        fn parser_to_parser_any<Err: From<String> + 'static, T: Clone + 'static, A: 'static>(parser: Parser<Err,T,A>) -> Parser<Err,T,Box<dyn Any>> {
+    fn into_any_parser<Err: Clone + From<String> + 'static>(&self) -> Parser<Err, T, Box<dyn Any>>
+    where
+        T: Clone + Into<char> + std::fmt::Display + 'static,
+    {
+        fn parser_to_parser_any<Err: From<String> + 'static, T: Clone + 'static, A: 'static>(
+            parser: Parser<Err, T, A>,
+        ) -> Parser<Err, T, Box<dyn Any>> {
             parser.map(|x| Box::new(x) as Box<dyn Any>)
         }
         match self {
@@ -537,29 +836,46 @@ impl<T> ParserBase2<T> {
                 let pred = Rc::clone(pred);
                 let pred = move |t: &T| pred.borrow_mut()(t);
                 parser_to_parser_any(Parser::satisfy(pred))
-            },
+            }
             &ParserBase2::MatchStringParser(ref clone_t, ref t_to_char, ref str) => {
                 let str: String = str.iter().collect();
                 parser_to_parser_any(Parser::match_string(&str))
-            },
+            }
             &ParserBase2::EofParser => parser_to_parser_any(Parser::eof()),
             &ParserBase2::MapParser(ref parser, ref f) => {
                 let parser = parser.into_any_parser();
                 let f = Rc::clone(f);
                 let f = move |a| f.borrow_mut()(a);
                 parser_to_parser_any(parser.map(f))
-            },
+            }
             &ParserBase2::FlatMapParser(ref parser, ref cont) => {
                 let parser = parser.into_any_parser();
                 let cont = Rc::clone(cont);
                 let cont = move |a| cont.borrow_mut()(a).into_any_parser();
                 parser_to_parser_any(parser.flat_map(cont))
-            },
-            &ParserBase2::OrderedChoice(ref parsers) =>
-                Parser::choice(parsers.iter().map(|parser| parser.into_any_parser()).collect()),
-            &ParserBase2::UnorderedChoice(ref parsers) =>
-                Parser::unordered_choice(parsers.iter().map(|parser| parser.into_any_parser()).collect()),
-            &ParserBase2::ReturnString(ref parser) => parser_to_parser_any(Parser::return_string(&parser.into_any_parser())),
+            }
+            &ParserBase2::OrderedChoice(ref parsers) => Parser::choice(
+                parsers
+                    .iter()
+                    .map(|parser| parser.into_any_parser())
+                    .collect(),
+            ),
+            &ParserBase2::UnorderedChoice(ref parsers) => Parser::unordered_choice(
+                parsers
+                    .iter()
+                    .map(|parser| parser.into_any_parser())
+                    .collect(),
+            ),
+            &ParserBase2::FilterParser(ref parser, ref pred) => {
+                let parser = parser.into_any_parser();
+                let pred = Rc::clone(pred);
+                let pred = move |x: &Box<dyn Any>| pred.borrow_mut()(x);
+                parser.filter(pred, "filter error".to_owned().into())
+            }
+            &ParserBase2::ReturnString(ref parser) => {
+                parser_to_parser_any(Parser::return_string(&parser.into_any_parser()))
+            }
+            &ParserBase2::Unimplemented => Parser::unimplemented(),
         }
     }
 }
@@ -731,11 +1047,14 @@ impl<Err: From<String> + Clone + 'static, T: 'static, A: 'static> ParserBase<Err
             save_pos_op: Option<usize>,
             last_error_op: Option<Err>,
         }
-        impl<Err: From<String>, T, A> Generator<TokenStream<T>> for MyGenerator<Err,T,A> {
+        impl<Err: From<String>, T, A> Generator<TokenStream<T>> for MyGenerator<Err, T, A> {
             type Yield = A;
             type Result = Result<A, Err>;
 
-            fn resume(mut self: Box<Self>, tokens: &mut TokenStream<T>) -> GeneratorState<TokenStream<T>, Self::Yield, Self::Result> {
+            fn resume(
+                mut self: Box<Self>,
+                tokens: &mut TokenStream<T>,
+            ) -> GeneratorState<TokenStream<T>, Self::Yield, Self::Result> {
                 let save_pos;
                 if let Some(save_pos2) = self.save_pos_op {
                     save_pos = save_pos2;
@@ -747,23 +1066,23 @@ impl<Err: From<String> + Clone + 'static, T: 'static, A: 'static> ParserBase<Err
                         GeneratorState::Yielded(a, next) => {
                             return GeneratorState::Yielded(a, next);
                         }
-                        GeneratorState::Complete(r) => {
-                            match r {
-                                Ok(a) => {
-                                    return GeneratorState::Complete(Ok(a));
-                                }
-                                Err(error) => {
-                                    self.last_error_op = Some(error);
-                                    tokens.restore(save_pos);
-                                }
+                        GeneratorState::Complete(r) => match r {
+                            Ok(a) => {
+                                return GeneratorState::Complete(Ok(a));
                             }
-                        }
+                            Err(error) => {
+                                self.last_error_op = Some(error);
+                                tokens.restore(save_pos);
+                            }
+                        },
                     }
                 }
                 if let Some(error) = self.last_error_op {
                     return GeneratorState::Complete(Err(error));
                 } else {
-                    return GeneratorState::Complete(Err("No parsers matched in Parser::choice().".to_owned().into()));
+                    return GeneratorState::Complete(Err(
+                        "No parsers matched in Parser::choice().".to_owned().into(),
+                    ));
                 }
             }
         }
@@ -801,14 +1120,15 @@ impl<Err: Clone + 'static, T: 'static, A: 'static> ParserBase<Err, T, A>
     }
 }
 
-
 struct FilterParser<Err, T, A> {
     parser: Parser<Err, T, A>,
     pred: Rc<RefCell<dyn FnMut(&A) -> bool>>,
     error: Err,
 }
 
-impl<Err: Clone + 'static, T: 'static, A: 'static> ParserBase<Err, T, A> for FilterParser<Err, T, A> {
+impl<Err: Clone + 'static, T: 'static, A: 'static> ParserBase<Err, T, A>
+    for FilterParser<Err, T, A>
+{
     fn run(&self) -> Box<dyn Generator<TokenStream<T>, Yield = A, Result = Result<A, Err>>> {
         struct MyGenerator<Err, T, A> {
             generator: Box<dyn Generator<TokenStream<T>, Yield = A, Result = Result<A, Err>>>,
@@ -819,7 +1139,10 @@ impl<Err: Clone + 'static, T: 'static, A: 'static> ParserBase<Err, T, A> for Fil
             type Yield = A;
             type Result = Result<A, Err>;
 
-            fn resume(mut self: Box<Self>, tokens: &mut TokenStream<T>) -> GeneratorState<TokenStream<T>, Self::Yield, Self::Result> {
+            fn resume(
+                mut self: Box<Self>,
+                tokens: &mut TokenStream<T>,
+            ) -> GeneratorState<TokenStream<T>, Self::Yield, Self::Result> {
                 loop {
                     match self.generator.resume(tokens) {
                         GeneratorState::Yielded(a, next) => {
@@ -828,19 +1151,17 @@ impl<Err: Clone + 'static, T: 'static, A: 'static> ParserBase<Err, T, A> for Fil
                                 return GeneratorState::Yielded(a, self);
                             }
                         }
-                        GeneratorState::Complete(r) => {
-                            match r {
-                                Ok(a) => {
-                                    if !self.pred.borrow_mut()(&a) {
-                                        return GeneratorState::Complete(Err(self.error));
-                                    }
-                                    return GeneratorState::Complete(Ok(a));
-                                },
-                                Err(err) => {
-                                    return GeneratorState::Complete(Err(err));
+                        GeneratorState::Complete(r) => match r {
+                            Ok(a) => {
+                                if !self.pred.borrow_mut()(&a) {
+                                    return GeneratorState::Complete(Err(self.error));
                                 }
+                                return GeneratorState::Complete(Ok(a));
                             }
-                        }
+                            Err(err) => {
+                                return GeneratorState::Complete(Err(err));
+                            }
+                        },
                     }
                 }
             }
@@ -915,17 +1236,26 @@ struct ReturnStringParser<Err, T, A> {
     parser: Parser<Err, T, A>,
 }
 
-impl<Err: 'static, T: Clone + Into<char> + 'static, A: 'static> ParserBase<Err, T, String> for ReturnStringParser<Err, T, A> {
-    fn run(&self) -> Box<dyn Generator<TokenStream<T>, Yield = String, Result = Result<String, Err>>> {
+impl<Err: 'static, T: Clone + Into<char> + 'static, A: 'static> ParserBase<Err, T, String>
+    for ReturnStringParser<Err, T, A>
+{
+    fn run(
+        &self,
+    ) -> Box<dyn Generator<TokenStream<T>, Yield = String, Result = Result<String, Err>>> {
         struct MyGenerator<Err, T, A> {
             generator: Box<dyn Generator<TokenStream<T>, Yield = A, Result = Result<A, Err>>>,
             start_pos_op: Option<usize>,
         }
-        impl<Err: 'static, T: Clone + Into<char> + 'static, A: 'static> Generator<TokenStream<T>> for MyGenerator<Err, T, A> {
+        impl<Err: 'static, T: Clone + Into<char> + 'static, A: 'static> Generator<TokenStream<T>>
+            for MyGenerator<Err, T, A>
+        {
             type Yield = String;
             type Result = Result<String, Err>;
 
-            fn resume(mut self: Box<Self>, tokens: &mut TokenStream<T>) -> GeneratorState<TokenStream<T>, Self::Yield, Self::Result> {
+            fn resume(
+                mut self: Box<Self>,
+                tokens: &mut TokenStream<T>,
+            ) -> GeneratorState<TokenStream<T>, Self::Yield, Self::Result> {
                 let start_pos;
                 if let Some(start_pos2) = self.start_pos_op {
                     start_pos = start_pos2;
@@ -949,17 +1279,15 @@ impl<Err: 'static, T: Clone + Into<char> + 'static, A: 'static> ParserBase<Err, 
                     GeneratorState::Yielded(_a, next) => {
                         self.generator = next;
                         return GeneratorState::Yielded(extract_str(tokens), self);
-                    },
-                    GeneratorState::Complete(r) => {
-                        match r {
-                            Ok(_a) => {
-                                return GeneratorState::Complete(Ok(extract_str(tokens)));
-                            },
-                            Err(err) => {
-                                return GeneratorState::Complete(Err(err));
-                            }
-                        }
                     }
+                    GeneratorState::Complete(r) => match r {
+                        Ok(_a) => {
+                            return GeneratorState::Complete(Ok(extract_str(tokens)));
+                        }
+                        Err(err) => {
+                            return GeneratorState::Complete(Err(err));
+                        }
+                    },
                 }
             }
         }

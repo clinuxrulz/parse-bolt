@@ -1,7 +1,7 @@
 #[cfg(test)]
-use crate::Parser;
-#[cfg(test)]
 use crate::kotlin;
+#[cfg(test)]
+use crate::Parser;
 
 #[test]
 fn test_kotlin_import_header() {
@@ -19,11 +19,9 @@ fn test_kotlin_identifier() {
     let r = parser.run_str(input);
     assert_eq!(
         r,
-        Ok(
-            kotlin::data::Identifier {
-                parts: vec!["test1".to_owned(), "test2".to_owned(), "test3".to_owned()]
-            }
-        )
+        Ok(kotlin::data::Identifier {
+            parts: vec!["test1".to_owned(), "test2".to_owned(), "test3".to_owned()]
+        })
     );
 }
 

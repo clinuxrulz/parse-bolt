@@ -1,7 +1,7 @@
 // https://kotlinlang.org/docs/reference/grammar.html
 use super::super::choice_lazy;
-use super::super::Parser;
 use super::super::kotlin;
+use super::super::Parser;
 use super::ShebangLine;
 
 pub fn shebang_line() -> Parser<String, char, ShebangLine> {

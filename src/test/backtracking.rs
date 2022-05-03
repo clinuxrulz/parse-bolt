@@ -117,7 +117,10 @@ fn backtracking_parser_test_digits_with_separators() {
     fn parser() -> Parser<String, char, String> {
         choice_lazy!(
             Parser::satisfy(|x| '0' <= *x && *x <= '9')
-                .seq2(&Parser::satisfy(|x| '0' <= *x && *x <= '9' || *x == '_').zero_or_more_vec_unordered_choice())
+                .seq2(
+                    &Parser::satisfy(|x| '0' <= *x && *x <= '9' || *x == '_')
+                        .zero_or_more_vec_unordered_choice()
+                )
                 .seq2(&Parser::satisfy(|x| '0' <= *x && *x <= '9'))
                 .map_to(()),
             Parser::satisfy(|x| '0' <= *x && *x <= '9').map_to(()),
