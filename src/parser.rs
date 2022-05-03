@@ -479,6 +479,10 @@ impl<Err,T,A> Parser2<Err,T,A> {
             _ => Parser2::wrap_base(ParserBase2::FlatMapParser(Rc::clone(&self.base), cont)),
         }
     }
+
+    pub fn return_string(&self) -> Parser2<Err,T,String> {
+        Parser2::wrap_base(ParserBase2::ReturnString(Rc::clone(&self.base)))
+    }
 }
 
 impl<Err,T> Parser2<Err,T,()> {
@@ -509,6 +513,7 @@ enum ParserBase2<T> {
     EofParser,
     MapParser(Rc<ParserBase2<T>>,Rc<RefCell<dyn FnMut(Box<dyn Any>)->Box<dyn Any>>>),
     FlatMapParser(Rc<ParserBase2<T>>,Rc<RefCell<dyn FnMut(Box<dyn Any>)->Rc<ParserBase2<T>>>>),
+    ReturnString(Rc<ParserBase2<T>>),
 }
 
 impl<T> ParserBase2<T> {
@@ -540,6 +545,7 @@ impl<T> ParserBase2<T> {
                 let cont = move |a| cont.borrow_mut()(a).into_any_parser();
                 parser_to_parser_any(parser.flat_map(cont))
             },
+            &ParserBase2::ReturnString(ref parser) => parser_to_parser_any(Parser::return_string(&parser.into_any_parser())),
         }
     }
 }
