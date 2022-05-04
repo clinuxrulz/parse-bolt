@@ -48,7 +48,11 @@ impl<Err, T, A> Parser<Err, T, A> {
                 ParserArrowF::Satisfy(pred) => {
                     let t_op = tokens.read();
                     if let Some(t) = t_op {
-                        val = Box::new(t) as Box<dyn Any>;
+                        if pred.borrow_mut()(&t) {
+                            val = Box::new(t) as Box<dyn Any>;
+                        } else {
+                            return Err("fail".to_owned().into());
+                        }
                     } else {
                         return Err("fail".to_owned().into());
                     }
