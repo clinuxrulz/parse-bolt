@@ -153,8 +153,21 @@ impl<T> ParserArrow<T> {
                 ParserArrowF::Choice(arrows) => {
                     todo!();
                 }
-                ParserArrowF::ReturnString(arrow) => {
-                    todo!();
+                ParserArrowF::ReturnString(t_to_char, arrow) => {
+                    let start_pos = tokens.save();
+                    let r = arrow.run(tokens);
+                    if let Err(error) = r {
+                        return Err(error);
+                    }
+                    let end_pos = tokens.save();
+                    tokens.restore(start_pos);
+                    let mut str = "".to_owned();
+                    for _i in start_pos..end_pos {
+                        if let Some(t) = tokens.read() {
+                            str.push(t_to_char(&t));
+                        }
+                    }
+                    tokens.restore(end_pos);
                 }
             }
         }
@@ -220,7 +233,7 @@ enum ParserArrowF<T> {
     Choice(Vec<Rc<ParserArrow<T>>>),
 
     // (A ~> B) -> A ~> String
-    ReturnString(Rc<ParserArrow<T>>),
+    ReturnString(fn(&T) -> char, Rc<ParserArrow<T>>),
 }
 
 impl<T> Clone for ParserArrowF<T> {
@@ -235,7 +248,7 @@ impl<T> Clone for ParserArrowF<T> {
             &ParserArrowF::Choice(ref arrows) => {
                 ParserArrowF::Choice(arrows.iter().map(Rc::clone).collect())
             }
-            &ParserArrowF::ReturnString(ref arrow) => ParserArrowF::ReturnString(Rc::clone(arrow)),
+            &ParserArrowF::ReturnString(ref token_to_char, ref arrow) => ParserArrowF::ReturnString(*token_to_char, Rc::clone(arrow)),
             &ParserArrowF::Lift(ref f) => ParserArrowF::Lift(Rc::clone(f)),
         }
     }
