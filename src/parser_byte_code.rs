@@ -6,10 +6,13 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 pub enum ParserByteCodeInstruction<T> {
+    Label(usize),
     Nop,
     Call(usize),
     RetN(usize),
     Push(Value<T>),
+    GetLocal(usize),
+    SetLocal(usize),
     JumpTrue(usize),
     JumpFalse(usize),
     Jump(usize),
@@ -35,6 +38,10 @@ impl<T> ParserByteCodeInstructions<T> {
         self.instructions.len()
     }
 
+    pub fn label(&mut self, ident: usize) {
+        self.instructions.push(ParserByteCodeInstruction::Label(ident));
+    }
+
     pub fn nop(&mut self) {
         self.instructions.push(ParserByteCodeInstruction::Nop);
     }
@@ -51,12 +58,24 @@ impl<T> ParserByteCodeInstructions<T> {
         self.instructions.push(ParserByteCodeInstruction::Push(value));
     }
 
-    pub fn jump_true(&mut self, line: usize) {
-        self.instructions.push(ParserByteCodeInstruction::JumpTrue(line));
+    pub fn get_local(&mut self, ident: usize) {
+        self.instructions.push(ParserByteCodeInstruction::GetLocal(ident));
     }
 
-    pub fn jump_false(&mut self, line: usize) {
-        self.instructions.push(ParserByteCodeInstruction::JumpFalse(line));
+    pub fn set_local(&mut self, ident: usize) {
+        self.instructions.push(ParserByteCodeInstruction::SetLocal(ident));
+    }
+
+    pub fn jump_true(&mut self, label_ident: usize) {
+        self.instructions.push(ParserByteCodeInstruction::JumpTrue(label_ident));
+    }
+
+    pub fn jump_false(&mut self, label_ident: usize) {
+        self.instructions.push(ParserByteCodeInstruction::JumpFalse(label_ident));
+    }
+
+    pub fn jump(&mut self, label_ident: usize) {
+        self.instructions.push(ParserByteCodeInstruction::Jump(label_ident));
     }
 
     pub fn eq_token_op(&mut self, token_op: Option<T>) {
@@ -78,25 +97,6 @@ impl<T> ParserByteCodeInstructions<T> {
     pub fn restore_pos(&mut self) {
         self.instructions.push(ParserByteCodeInstruction::RestorePos);
     }
-
-    pub fn match_string(&mut self, str: &str) where T: From<char> {
-        let mut jump_lines = Vec::new();
-        for char in str.chars() {
-            let token_op: Option<T> = Some(char.into());
-            self.read_token();
-            self.eq_token_op(token_op);
-            jump_lines.push(self.next_line());
-            self.nop();
-        }
-        let end_line = self.next_line();
-        self.push(Value::Bool(false));
-        let end_line2 = self.next_line();
-        for i in 0..jump_lines.len()-1 {
-            let jump_line = jump_lines[i];
-            self.instructions[jump_line] = ParserByteCodeInstruction::JumpFalse(end_line);
-        }
-        self.instructions[jump_lines[jump_lines.len()-1]] = ParserByteCodeInstruction::Jump(end_line2);
-    }
 }
 
 #[derive(Clone)]
@@ -106,6 +106,7 @@ pub enum Value<T> {
     TokenStreamPos(usize),
     UserVal(Rc<dyn Any>),
     Bool(bool),
+    Function(usize),
 }
 
 pub struct ParserByteCode<T> {
@@ -123,6 +124,43 @@ impl<T> ParserByteCode<T> {
         }
     }
 
+    pub fn sweep_labels(&mut self) {
+        let mut label_to_line_map: HashMap<usize, usize> = HashMap::new();
+        for instructions in self.functions.values_mut() {
+            let mut line: usize = 0;
+            for i in 0..instructions.instructions.len() {
+                let instruction = &instructions.instructions[i];
+                match instruction {
+                    &ParserByteCodeInstruction::Label(ident) => {
+                        label_to_line_map.insert(ident, line);
+                    }
+                    _ => {
+                        line += 1
+                    }
+                }
+            }
+            for i in (0..instructions.instructions.len()).rev() {
+                let instruction = &mut instructions.instructions[i];
+                match instruction {
+                    &mut ParserByteCodeInstruction::Label(_) => {
+                        instructions.instructions.remove(i);
+                    }
+                    &mut ParserByteCodeInstruction::JumpTrue(ref mut ident) => {
+                        *ident = *label_to_line_map.get(ident).unwrap();
+                    },
+                    &mut ParserByteCodeInstruction::JumpFalse(ref mut ident) => {
+                        *ident = *label_to_line_map.get(ident).unwrap();
+                    },
+                    &mut ParserByteCodeInstruction::Jump(ref mut ident) => {
+                        *ident = *label_to_line_map.get(ident).unwrap();
+                    },
+                    _ => {}
+                }
+            }
+            label_to_line_map.clear();
+        }
+    }
+
     fn set_entry(&mut self, function: usize) {
         self.entry_op = Some(function);
     }
@@ -133,18 +171,70 @@ impl<T> ParserByteCode<T> {
         return var;
     }
 
-    fn define_func<MkInstrs: FnOnce(&mut ParserByteCodeInstructions<T>)>(&mut self, mk_instrs: MkInstrs) -> usize {
+    fn define_func<MkInstrs: FnOnce(&mut ParserByteCode<T>,&mut ParserByteCodeInstructions<T>)>(&mut self, mk_instrs: MkInstrs) -> usize {
         let function = self.alloc_var();
         let mut instructions = ParserByteCodeInstructions::new();
-        mk_instrs(&mut instructions);
+        mk_instrs(self, &mut instructions);
         self.functions.insert(function, instructions);
         return function;
+    }
+
+    pub fn match_string(&mut self, str: &str) -> usize where T: From<char> {
+        self.define_func(|parser_byte_code, ctx| {
+            let jump1 = 0;
+            let jump2 = 1;
+            let mut idx = 0;
+            let num_chars = str.chars().count();
+            for char in str.chars() {
+                let token_op: Option<T> = Some(char.into());
+                ctx.read_token();
+                ctx.eq_token_op(token_op);
+                if idx < num_chars-1 {
+                    ctx.jump_false(jump1);
+                } else {
+                    ctx.jump(jump2);
+                }
+                idx += 1;
+            }
+            ctx.label(jump1);
+            ctx.push(Value::Bool(false));
+            ctx.label(jump2);
+        })
+    }
+
+    fn ordered_choice(&mut self, functions: Vec<usize>) -> usize {
+        todo!();
+    }
+
+    fn unordered_choice(&mut self, functions: Vec<usize>) -> usize {
+        // After function call:
+        //     stack: (true, result, true, next_fn, ...): successful parse and resume exists
+        //     stack: (true, result, false, ...): successful parse and no resume exists
+        //     stack: (false, ...): parse was unsuccessful
+        //
+        // TODO: Tricky
+        self.define_func(|parser_byte_code, ctx| {
+            let mut first = false;
+            let var_success = 0;
+            let var_result = 1;
+            for function in functions {
+                if !first {
+                    ctx.set_local(var_success);
+                    ctx.get_local(var_success);
+                    let jump_line = ctx.next_line();
+                    ctx.nop();
+                    ctx.set_local(var_result);
+                }
+                if first { first = !first; }
+            }
+        })
     }
 }
 
 pub struct ParserByteCodeInterpretter<T> {
     parser_byte_code: ParserByteCode<T>,
     stack: Vec<Value<T>>,
+    locals: HashMap<usize, Value<T>>,
 }
 
 impl<T> ParserByteCodeInterpretter<T> {
@@ -152,10 +242,12 @@ impl<T> ParserByteCodeInterpretter<T> {
         ParserByteCodeInterpretter {
             parser_byte_code,
             stack: Vec::new(),
+            locals: HashMap::new(),
         }
     }
 
     pub fn execute(&mut self, token_stream: &mut TokenStream<T>) where T: Clone + PartialEq {
+        self.parser_byte_code.sweep_labels();
         if self.parser_byte_code.entry_op.is_none() {
             return;
         }
@@ -165,11 +257,13 @@ impl<T> ParserByteCodeInterpretter<T> {
         loop {
             let instructions = &self.parser_byte_code.functions[&at_function];
             if at_line >= instructions.instructions.len() {
+                self.locals.clear();
                 break;
             }
             for line in at_line..instructions.instructions.len() {
                 let instruction = &instructions.instructions[line];
                 match instruction {
+                    &ParserByteCodeInstruction::Label(_) => panic!("Labels should already be stripped and converted to line numbers."),
                     &ParserByteCodeInstruction::Nop => {},
                     &ParserByteCodeInstruction::Call(function) => {
                         self.stack.push(Value::CodeLoc { function: at_function, line: line + 1 });
@@ -190,13 +284,21 @@ impl<T> ParserByteCodeInterpretter<T> {
                         }
                         at_function = ret_function;
                         at_line = ret_line;
+                        self.locals.clear();
                         break;
                     },
                     &ParserByteCodeInstruction::Push(ref value) => {
                         self.stack.push(value.clone());
                     },
+                    &ParserByteCodeInstruction::GetLocal(ident) => {
+                        self.stack.push(self.locals.get(&ident).expect("Local variable read before set.").clone());
+                    },
+                    &ParserByteCodeInstruction::SetLocal(ident) => {
+                        let value = self.stack.pop().expect("Empty stack on set_local.");
+                        self.locals.insert(ident, value);
+                    },
                     &ParserByteCodeInstruction::JumpTrue(line) => {
-                        let value = self.stack.pop().expect("Empty stack on jump_true");
+                        let value = self.stack.pop().expect("Empty stack on jump_true.");
                         match value {
                             Value::Bool(cond) => {
                                 if cond {
@@ -208,7 +310,7 @@ impl<T> ParserByteCodeInterpretter<T> {
                         }
                     },
                     &ParserByteCodeInstruction::JumpFalse(line) => {
-                        let value = self.stack.pop().expect("Empty stack on jump_true");
+                        let value = self.stack.pop().expect("Empty stack on jump_false.");
                         match value {
                             Value::Bool(cond) => {
                                 if !cond {
@@ -216,7 +318,7 @@ impl<T> ParserByteCodeInterpretter<T> {
                                     break;
                                 }
                             },
-                            _ => panic!("Expected Bool in stack on call to jump_true."),
+                            _ => panic!("Expected Bool in stack on call to jump_false."),
                         }
                     },
                     &ParserByteCodeInstruction::Jump(line) => {
@@ -265,9 +367,7 @@ impl<T> ParserByteCodeInterpretter<T> {
 #[test]
 fn test_parser_byte_code() {
     let mut parser_byte_code: ParserByteCode<char> = ParserByteCode::new();
-    let function = parser_byte_code.define_func(|ctx| {
-        ctx.match_string("Test");
-    });
+    let function = parser_byte_code.match_string("Test");
     parser_byte_code.set_entry(function);
     let mut interpretter = ParserByteCodeInterpretter::new(parser_byte_code);
     let mut token_stream = TokenStream::from_str("Test");
