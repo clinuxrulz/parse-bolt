@@ -209,6 +209,16 @@ impl<Err, T, A> Parser<Err, T, A> {
     }
 
     #[inline(always)]
+    pub fn optional_unordered_choice(&self) -> Parser<Err, T, Option<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: 'static,
+    {
+        Parser::unordered_choice(vec![self.map(Some), Parser::empty().map(|_| None)])
+    }
+
+    #[inline(always)]
     pub fn lazy<Unbox: FnMut() -> Parser<Err, T, A> + 'static>(
         mut unbox: Unbox,
     ) -> Parser<Err, T, A>
