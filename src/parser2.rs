@@ -57,6 +57,14 @@ impl<Err, T, A> Parser<Err, T, A> {
                 )))),
         )
     }
+
+    pub fn choice(parsers: Vec<Parser<Err,T,A>>) -> Parser<Err,T,A> {
+        Parser::wrap_arrow(
+            ParserArrow::choice(
+                parsers.iter().map(|parser| Rc::new(parser.arrow.clone())).collect()
+            )
+        )
+    }
 }
 
 impl<Err, T> Parser<Err, T, T> {
@@ -215,6 +223,10 @@ impl<T> ParserArrow<T> {
         T: Clone + Into<char>,
     {
         ParserArrow::lift_f(ParserArrowF::MatchString(|t: &T| t.clone().into(), str))
+    }
+
+    fn choice(arrows: Vec<Rc<ParserArrow<T>>>) -> ParserArrow<T> {
+        ParserArrow::lift_f(ParserArrowF::Choice(arrows))
     }
 
     // (a ~> b) -> (b ~> c) -> (a ~> c)
