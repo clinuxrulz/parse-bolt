@@ -151,7 +151,21 @@ impl<T> ParserArrow<T> {
                     }
                 }
                 ParserArrowF::Choice(arrows) => {
-                    todo!();
+                    // TODO: For backtracking, compose the arrows with the remaining instructions before executing them.
+                    let pos = tokens.save();
+                    let mut found = false;
+                    for arrow in arrows {
+                        tokens.restore(pos);
+                        let r: Result<_,Err> = arrow.run(tokens);
+                        if let Ok(a) = r {
+                            found = true;
+                            val = a;
+                            break;
+                        }
+                    }
+                    if !found {
+                        return Err("fail".to_owned().into());
+                    }
                 }
                 ParserArrowF::ReturnString(t_to_char, arrow) => {
                     let start_pos = tokens.save();
