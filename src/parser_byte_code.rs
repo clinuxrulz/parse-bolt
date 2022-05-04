@@ -17,7 +17,7 @@ pub enum ParserByteCodeInstruction<T> {
     JumpFalse(usize),
     Jump(usize),
     EqTokenOp(Option<T>),
-    ExecPred(Rc<RefCell<dyn FnMut(&Option<T>)->bool>>),
+    ExecPred(Rc<RefCell<dyn FnMut(&Option<T>) -> bool>>),
     ReadToken,
     SavePos,
     RestorePos,
@@ -39,7 +39,8 @@ impl<T> ParserByteCodeInstructions<T> {
     }
 
     pub fn label(&mut self, ident: usize) {
-        self.instructions.push(ParserByteCodeInstruction::Label(ident));
+        self.instructions
+            .push(ParserByteCodeInstruction::Label(ident));
     }
 
     pub fn nop(&mut self) {
@@ -47,43 +48,53 @@ impl<T> ParserByteCodeInstructions<T> {
     }
 
     pub fn call(&mut self, function: usize) {
-        self.instructions.push(ParserByteCodeInstruction::Call(function));
+        self.instructions
+            .push(ParserByteCodeInstruction::Call(function));
     }
 
     pub fn retn(&mut self, num_results: usize) {
-        self.instructions.push(ParserByteCodeInstruction::RetN(num_results));
+        self.instructions
+            .push(ParserByteCodeInstruction::RetN(num_results));
     }
 
     pub fn push(&mut self, value: Value<T>) {
-        self.instructions.push(ParserByteCodeInstruction::Push(value));
+        self.instructions
+            .push(ParserByteCodeInstruction::Push(value));
     }
 
     pub fn get_local(&mut self, ident: usize) {
-        self.instructions.push(ParserByteCodeInstruction::GetLocal(ident));
+        self.instructions
+            .push(ParserByteCodeInstruction::GetLocal(ident));
     }
 
     pub fn set_local(&mut self, ident: usize) {
-        self.instructions.push(ParserByteCodeInstruction::SetLocal(ident));
+        self.instructions
+            .push(ParserByteCodeInstruction::SetLocal(ident));
     }
 
     pub fn jump_true(&mut self, label_ident: usize) {
-        self.instructions.push(ParserByteCodeInstruction::JumpTrue(label_ident));
+        self.instructions
+            .push(ParserByteCodeInstruction::JumpTrue(label_ident));
     }
 
     pub fn jump_false(&mut self, label_ident: usize) {
-        self.instructions.push(ParserByteCodeInstruction::JumpFalse(label_ident));
+        self.instructions
+            .push(ParserByteCodeInstruction::JumpFalse(label_ident));
     }
 
     pub fn jump(&mut self, label_ident: usize) {
-        self.instructions.push(ParserByteCodeInstruction::Jump(label_ident));
+        self.instructions
+            .push(ParserByteCodeInstruction::Jump(label_ident));
     }
 
     pub fn eq_token_op(&mut self, token_op: Option<T>) {
-        self.instructions.push(ParserByteCodeInstruction::EqTokenOp(token_op));
+        self.instructions
+            .push(ParserByteCodeInstruction::EqTokenOp(token_op));
     }
 
-    pub fn exec_pred(&mut self, pred: Rc<RefCell<dyn FnMut(&Option<T>)->bool>>) {
-        self.instructions.push(ParserByteCodeInstruction::ExecPred(pred));
+    pub fn exec_pred(&mut self, pred: Rc<RefCell<dyn FnMut(&Option<T>) -> bool>>) {
+        self.instructions
+            .push(ParserByteCodeInstruction::ExecPred(pred));
     }
 
     pub fn read_token(&mut self) {
@@ -95,7 +106,8 @@ impl<T> ParserByteCodeInstructions<T> {
     }
 
     pub fn restore_pos(&mut self) {
-        self.instructions.push(ParserByteCodeInstruction::RestorePos);
+        self.instructions
+            .push(ParserByteCodeInstruction::RestorePos);
     }
 }
 
@@ -134,9 +146,7 @@ impl<T> ParserByteCode<T> {
                     &ParserByteCodeInstruction::Label(ident) => {
                         label_to_line_map.insert(ident, line);
                     }
-                    _ => {
-                        line += 1
-                    }
+                    _ => line += 1,
                 }
             }
             for i in (0..instructions.instructions.len()).rev() {
@@ -147,13 +157,13 @@ impl<T> ParserByteCode<T> {
                     }
                     &mut ParserByteCodeInstruction::JumpTrue(ref mut ident) => {
                         *ident = *label_to_line_map.get(ident).unwrap();
-                    },
+                    }
                     &mut ParserByteCodeInstruction::JumpFalse(ref mut ident) => {
                         *ident = *label_to_line_map.get(ident).unwrap();
-                    },
+                    }
                     &mut ParserByteCodeInstruction::Jump(ref mut ident) => {
                         *ident = *label_to_line_map.get(ident).unwrap();
-                    },
+                    }
                     _ => {}
                 }
             }
@@ -171,7 +181,10 @@ impl<T> ParserByteCode<T> {
         return var;
     }
 
-    fn define_func<MkInstrs: FnOnce(&mut ParserByteCode<T>,&mut ParserByteCodeInstructions<T>)>(&mut self, mk_instrs: MkInstrs) -> usize {
+    fn define_func<MkInstrs: FnOnce(&mut ParserByteCode<T>, &mut ParserByteCodeInstructions<T>)>(
+        &mut self,
+        mk_instrs: MkInstrs,
+    ) -> usize {
         let function = self.alloc_var();
         let mut instructions = ParserByteCodeInstructions::new();
         mk_instrs(self, &mut instructions);
@@ -179,7 +192,10 @@ impl<T> ParserByteCode<T> {
         return function;
     }
 
-    pub fn match_string(&mut self, str: &str) -> usize where T: From<char> {
+    pub fn match_string(&mut self, str: &str) -> usize
+    where
+        T: From<char>,
+    {
         self.define_func(|parser_byte_code, ctx| {
             let jump1 = 0;
             let jump2 = 1;
@@ -189,7 +205,7 @@ impl<T> ParserByteCode<T> {
                 let token_op: Option<T> = Some(char.into());
                 ctx.read_token();
                 ctx.eq_token_op(token_op);
-                if idx < num_chars-1 {
+                if idx < num_chars - 1 {
                     ctx.jump_false(jump1);
                 } else {
                     ctx.jump(jump2);
@@ -225,7 +241,9 @@ impl<T> ParserByteCode<T> {
                     ctx.nop();
                     ctx.set_local(var_result);
                 }
-                if first { first = !first; }
+                if first {
+                    first = !first;
+                }
             }
         })
     }
@@ -246,7 +264,10 @@ impl<T> ParserByteCodeInterpretter<T> {
         }
     }
 
-    pub fn execute(&mut self, token_stream: &mut TokenStream<T>) where T: Clone + PartialEq {
+    pub fn execute(&mut self, token_stream: &mut TokenStream<T>)
+    where
+        T: Clone + PartialEq,
+    {
         self.parser_byte_code.sweep_labels();
         if self.parser_byte_code.entry_op.is_none() {
             return;
@@ -263,14 +284,19 @@ impl<T> ParserByteCodeInterpretter<T> {
             for line in at_line..instructions.instructions.len() {
                 let instruction = &instructions.instructions[line];
                 match instruction {
-                    &ParserByteCodeInstruction::Label(_) => panic!("Labels should already be stripped and converted to line numbers."),
-                    &ParserByteCodeInstruction::Nop => {},
+                    &ParserByteCodeInstruction::Label(_) => {
+                        panic!("Labels should already be stripped and converted to line numbers.")
+                    }
+                    &ParserByteCodeInstruction::Nop => {}
                     &ParserByteCodeInstruction::Call(function) => {
-                        self.stack.push(Value::CodeLoc { function: at_function, line: line + 1 });
+                        self.stack.push(Value::CodeLoc {
+                            function: at_function,
+                            line: line + 1,
+                        });
                         at_function = function;
                         at_line = 0;
                         break;
-                    },
+                    }
                     &ParserByteCodeInstruction::RetN(num_results) => {
                         let value = self.stack.remove(self.stack.len() - 1 - num_results);
                         let ret_function;
@@ -279,24 +305,29 @@ impl<T> ParserByteCodeInterpretter<T> {
                             Value::CodeLoc { function, line } => {
                                 ret_function = function;
                                 ret_line = line;
-                            },
+                            }
                             _ => panic!("Expected CodeLoc in stack on call to return."),
                         }
                         at_function = ret_function;
                         at_line = ret_line;
                         self.locals.clear();
                         break;
-                    },
+                    }
                     &ParserByteCodeInstruction::Push(ref value) => {
                         self.stack.push(value.clone());
-                    },
+                    }
                     &ParserByteCodeInstruction::GetLocal(ident) => {
-                        self.stack.push(self.locals.get(&ident).expect("Local variable read before set.").clone());
-                    },
+                        self.stack.push(
+                            self.locals
+                                .get(&ident)
+                                .expect("Local variable read before set.")
+                                .clone(),
+                        );
+                    }
                     &ParserByteCodeInstruction::SetLocal(ident) => {
                         let value = self.stack.pop().expect("Empty stack on set_local.");
                         self.locals.insert(ident, value);
-                    },
+                    }
                     &ParserByteCodeInstruction::JumpTrue(line) => {
                         let value = self.stack.pop().expect("Empty stack on jump_true.");
                         match value {
@@ -305,10 +336,10 @@ impl<T> ParserByteCodeInterpretter<T> {
                                     at_line = line;
                                     break;
                                 }
-                            },
+                            }
                             _ => panic!("Expected Bool in stack on call to jump_true."),
                         }
-                    },
+                    }
                     &ParserByteCodeInstruction::JumpFalse(line) => {
                         let value = self.stack.pop().expect("Empty stack on jump_false.");
                         match value {
@@ -317,20 +348,20 @@ impl<T> ParserByteCodeInterpretter<T> {
                                     at_line = line;
                                     break;
                                 }
-                            },
+                            }
                             _ => panic!("Expected Bool in stack on call to jump_false."),
                         }
-                    },
+                    }
                     &ParserByteCodeInstruction::Jump(line) => {
                         at_line = line;
                         break;
-                    },
+                    }
                     &ParserByteCodeInstruction::EqTokenOp(ref token_op) => {
                         let value = self.stack.pop().expect("Empty stack on eq_token.");
                         match value {
                             Value::TokenOp(token_op2) => {
                                 self.stack.push(Value::Bool(*token_op == token_op2));
-                            },
+                            }
                             _ => panic!("Expected TokenOp in stack on call to eq_token."),
                         }
                     }
@@ -339,25 +370,25 @@ impl<T> ParserByteCodeInterpretter<T> {
                         match value {
                             Value::TokenOp(token) => {
                                 self.stack.push(Value::Bool(pred.borrow_mut()(&token)));
-                            },
-                            _ => panic!("Expected TokenOp in stack on call to exec_pred.")
+                            }
+                            _ => panic!("Expected TokenOp in stack on call to exec_pred."),
                         }
                     }
                     &ParserByteCodeInstruction::ReadToken => {
                         self.stack.push(Value::TokenOp(token_stream.read()));
-                    },
+                    }
                     &ParserByteCodeInstruction::SavePos => {
                         self.stack.push(Value::TokenStreamPos(token_stream.save()));
-                    },
+                    }
                     &ParserByteCodeInstruction::RestorePos => {
                         let value = self.stack.pop().expect("Empty stack on restore_pos.");
                         match value {
                             Value::TokenStreamPos(pos) => {
                                 token_stream.restore(pos);
-                            },
+                            }
                             _ => panic!("Expected TokenStreamPos in stack on call to restore_pos."),
                         }
-                    },
+                    }
                 }
             }
         }

@@ -267,7 +267,26 @@ pub struct ObjectDeclaration {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct FunctionDeclaration;
+pub struct FunctionDeclaration {
+    pub modifiers_op: Option<Modifiers>,
+    pub type_parameters_op: Option<TypeParameters>,
+    pub receiver_type_op: Option<ReceiverType>,
+    pub simple_identifier: String,
+    pub function_value_parameters: FunctionValueParameters,
+    pub type_op: Option<Type>,
+    pub type_constraints_op: Option<TypeConstraints>,
+    pub function_body_op: Option<FunctionBody>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FunctionValueParameters(pub Vec<FunctionValueParameter>);
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FunctionValueParameter {
+    pub parameter_modifiers_op: Option<ParameterModifiers>,
+    pub parameter: Parameter,
+    pub expression_op: Option<Expression>,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PropertyDeclaration;

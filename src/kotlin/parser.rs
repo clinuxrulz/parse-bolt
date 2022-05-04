@@ -1216,27 +1216,83 @@ pub fn object_declaration() -> Parser<String, char, data::ObjectDeclaration> {
             &lexer::seq2_skip_ws_nl(
                 &simple_identifier(),
                 &lexer::seq2_skip_ws_nl(
-                    &lexer::seq_right_skip_ws_nl(
-                        &lexer::colon(),
-                        &delegation_specifiers()
-                    )
-                    .optional(),
+                    &lexer::seq_right_skip_ws_nl(&lexer::colon(), &delegation_specifiers())
+                        .optional(),
                     &Parser::lazy(class_body).optional(),
-                )
-            )
-        )
+                ),
+            ),
+        ),
     )
-    .map(|(modifiers_op, (simple_identifier, (delegation_specifiers_op, class_body_op)))| {
-        data::ObjectDeclaration {
-            modifiers_op,
-            simple_identifier,
-            delegation_specifiers_op,
-            class_body_op,
-        }
-    })
+    .map(
+        |(modifiers_op, (simple_identifier, (delegation_specifiers_op, class_body_op)))| {
+            data::ObjectDeclaration {
+                modifiers_op,
+                simple_identifier,
+                delegation_specifiers_op,
+                class_body_op,
+            }
+        },
+    )
 }
 
 pub fn function_declaration() -> Parser<String, char, data::FunctionDeclaration> {
+    lexer::seq2_skip_ws_nl(
+        &modifiers().optional(),
+        &lexer::seq_right_skip_ws_nl(
+            &lexer::fun(),
+            &lexer::seq2_skip_ws_nl(
+                &type_parameters().optional(),
+                &lexer::seq2_skip_ws_nl(
+                    &lexer::seq_left_skip_ws_nl(&receiver_type(), &lexer::dot()).optional(),
+                    &lexer::seq2_skip_ws_nl(
+                        &simple_identifier(),
+                        &lexer::seq2_skip_ws_nl(
+                            &function_value_parameters(),
+                            &lexer::seq2_skip_ws_nl(
+                                &lexer::seq_right_skip_ws_nl(&lexer::colon(), &type_()).optional(),
+                                &lexer::seq2_skip_ws_nl(
+                                    &type_constraints().optional(),
+                                    &function_body().optional(),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+    .map(
+        |(
+            modifiers_op,
+            (
+                type_parameters_op,
+                (
+                    receiver_type_op,
+                    (
+                        simple_identifier,
+                        (
+                            function_value_parameters,
+                            (type_op, (type_constraints_op, function_body_op)),
+                        ),
+                    ),
+                ),
+            ),
+        )| {
+            data::FunctionDeclaration {
+                modifiers_op,
+                type_parameters_op,
+                receiver_type_op,
+                simple_identifier,
+                function_value_parameters,
+                type_op,
+                type_constraints_op,
+                function_body_op,
+            }
+        },
+    )
+}
+
+pub fn function_value_parameters() -> Parser<String, char, data::FunctionValueParameters> {
     Parser::unimplemented()
 }
 

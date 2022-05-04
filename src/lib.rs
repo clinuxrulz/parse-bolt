@@ -7,9 +7,9 @@ mod parser_byte_code;
 pub mod python;
 mod test;
 
-pub use self::parser::TokenStream;
 pub use self::parser::Parser;
 pub use self::parser::Parser2 as ExperimentalParser;
+pub use self::parser::TokenStream;
 
 #[macro_export]
 macro_rules! choice_lazy {
