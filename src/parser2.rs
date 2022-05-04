@@ -177,7 +177,7 @@ fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<VecBuilder<A>>) -> Vec<A> {
             VecBuilder::Push(a) => r.push(a.clone()),
             VecBuilder::Append(lhs, rhs) => {
                 queue.push(Rc::clone(lhs));
-                queue.push(Rc::clone(lhs));
+                queue.push(Rc::clone(rhs));
             }
         }
     }
