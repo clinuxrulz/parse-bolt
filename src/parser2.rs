@@ -36,7 +36,7 @@ impl<Err, T, A> Parser<Err, T, A> {
         T: Clone + 'static,
         A: 'static,
     {
-        let instructions = &self.arrow.composition;
+        let instructions = rc_vec_builder_into_vec(&self.arrow.composition);
         let mut val = Box::new(()) as Box<dyn Any>;
         for instruction in instructions {
             match instruction {
@@ -66,7 +66,7 @@ impl<Err, T, A> Parser<Err, T, A> {
                     for c in chars {
                         let t_op = tokens.read();
                         if let Some(t) = t_op {
-                            if t_to_char(&t) != *c {
+                            if t_to_char(&t) != c {
                                 return Err("fail".to_owned().into());
                             }
                         } else {
@@ -122,14 +122,34 @@ impl<Err, T> Parser<Err, T, ()> {
     }
 }
 
+enum VecBuilder<A> {
+    Push(A),
+    Append(Rc<VecBuilder<A>>,Rc<VecBuilder<A>>),
+}
+
+fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<VecBuilder<A>>) -> Vec<A> {
+    let mut r = Vec::new();
+    let mut stack = vec![Rc::clone(x)];
+    while let Some(at) = stack.pop() {
+        match &*at {
+            VecBuilder::Push(a) => r.push(a.clone()),
+            VecBuilder::Append(lhs, rhs) => {
+                stack.push(Rc::clone(lhs));
+                stack.push(Rc::clone(rhs));
+            }
+        }
+    }
+    r
+}
+
 struct ParserArrow<T> {
-    composition: Vec<ParserArrowF<T>>,
+    composition: Rc<VecBuilder<ParserArrowF<T>>>,
 }
 
 impl<T> Clone for ParserArrow<T> {
     fn clone(&self) -> Self {
         ParserArrow {
-            composition: self.composition.clone(),
+            composition: Rc::clone(&self.composition),
         }
     }
 }
@@ -137,7 +157,7 @@ impl<T> Clone for ParserArrow<T> {
 impl<T> ParserArrow<T> {
     fn lift_f(arrow: ParserArrowF<T>) -> ParserArrow<T> {
         ParserArrow {
-            composition: vec![arrow],
+            composition: Rc::new(VecBuilder::Push(arrow)),
         }
     }
 
@@ -166,11 +186,7 @@ impl<T> ParserArrow<T> {
 
     // (a ~> b) -> (b ~> c) -> (a ~> c)
     fn compose(&self, other: &ParserArrow<T>) -> ParserArrow<T> {
-        let mut tmp = self.composition.clone();
-        for arrow_f in &other.composition {
-            tmp.push((*arrow_f).clone());
-        }
-        return ParserArrow { composition: tmp };
+        return ParserArrow { composition: Rc::new(VecBuilder::Append(Rc::clone(&self.composition), Rc::clone(&other.composition))) };
     }
 }
 
