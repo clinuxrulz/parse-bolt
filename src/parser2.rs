@@ -175,8 +175,10 @@ fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<VecBuilder<A>>) -> Vec<A> {
         match &*at {
             VecBuilder::Push(a) => r.push(a.clone()),
             VecBuilder::Append(lhs, rhs) => {
-                stack.push(Rc::clone(lhs));
+                // Note: Not a bug. Push right then push left because things come off the stack in
+                //       the opposite order.
                 stack.push(Rc::clone(rhs));
+                stack.push(Rc::clone(lhs));
             }
         }
     }
@@ -362,7 +364,7 @@ fn test_arrow_parser() {
     let input = "123";
     let parser: Parser<String, char, _> =
         Parser::satisfy(|t| '0' <= *t && *t <= '9')
-            .seq2(&Parser::satisfy(|t| *t != '2'));
+            .seq2(&Parser::satisfy(|t| *t == '2'));
     let r = parser.run_str(input);
     println!("{:?}", r);
 }
