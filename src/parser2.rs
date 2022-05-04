@@ -36,54 +36,10 @@ impl<Err, T, A> Parser<Err, T, A> {
         T: Clone + 'static,
         A: 'static,
     {
-        let instructions = rc_vec_builder_into_vec(&self.arrow.composition);
-        let mut val = Box::new(()) as Box<dyn Any>;
-        for instruction in instructions {
-            match instruction {
-                ParserArrowF::Lift(f) => {
-                    val = f.borrow_mut()(val);
-                }
-                ParserArrowF::Empty => {}
-                ParserArrowF::Eof => {
-                    let t_op = tokens.read();
-                    if t_op.is_some() {
-                        return Err("fail".to_owned().into());
-                    }
-                }
-                ParserArrowF::Satisfy(pred) => {
-                    let t_op = tokens.read();
-                    if let Some(t) = t_op {
-                        if pred.borrow_mut()(&t) {
-                            val = Box::new(t) as Box<dyn Any>;
-                        } else {
-                            return Err("fail".to_owned().into());
-                        }
-                    } else {
-                        return Err("fail".to_owned().into());
-                    }
-                }
-                ParserArrowF::MatchString(t_to_char, chars) => {
-                    for c in chars {
-                        let t_op = tokens.read();
-                        if let Some(t) = t_op {
-                            if t_to_char(&t) != c {
-                                return Err("fail".to_owned().into());
-                            }
-                        } else {
-                            return Err("fail".to_owned().into());
-                        }
-                    }
-                }
-                ParserArrowF::Choice(arrows) => {
-                    todo!();
-                }
-                ParserArrowF::ReturnString(arrow) => {
-                    todo!();
-                }
-            }
-        }
-        let r: Box<A> = val.downcast().ok().unwrap();
-        return Ok(*r);
+        self.arrow.run(tokens).map(|a| {
+            let a: Box<A> = a.downcast().ok().unwrap();
+            *a
+        })
     }
 
     pub fn map<B: 'static, F: FnMut(A) -> B + 'static>(&self, mut f: F) -> Parser<Err, T, B>
@@ -155,6 +111,56 @@ impl<T> Clone for ParserArrow<T> {
 }
 
 impl<T> ParserArrow<T> {
+    fn run<Err>(&self, tokens: &mut TokenStream<T>) -> Result<Box<dyn Any>,Err> where Err: From<String>, T: Clone + 'static {
+        let instructions = rc_vec_builder_into_vec(&self.composition);
+        let mut val = Box::new(()) as Box<dyn Any>;
+        for instruction in instructions {
+            match instruction {
+                ParserArrowF::Lift(f) => {
+                    val = f.borrow_mut()(val);
+                }
+                ParserArrowF::Empty => {}
+                ParserArrowF::Eof => {
+                    let t_op = tokens.read();
+                    if t_op.is_some() {
+                        return Err("fail".to_owned().into());
+                    }
+                }
+                ParserArrowF::Satisfy(pred) => {
+                    let t_op = tokens.read();
+                    if let Some(t) = t_op {
+                        if pred.borrow_mut()(&t) {
+                            val = Box::new(t) as Box<dyn Any>;
+                        } else {
+                            return Err("fail".to_owned().into());
+                        }
+                    } else {
+                        return Err("fail".to_owned().into());
+                    }
+                }
+                ParserArrowF::MatchString(t_to_char, chars) => {
+                    for c in chars {
+                        let t_op = tokens.read();
+                        if let Some(t) = t_op {
+                            if t_to_char(&t) != c {
+                                return Err("fail".to_owned().into());
+                            }
+                        } else {
+                            return Err("fail".to_owned().into());
+                        }
+                    }
+                }
+                ParserArrowF::Choice(arrows) => {
+                    todo!();
+                }
+                ParserArrowF::ReturnString(arrow) => {
+                    todo!();
+                }
+            }
+        }
+        return Ok(val);
+    }
+
     fn lift_f(arrow: ParserArrowF<T>) -> ParserArrow<T> {
         ParserArrow {
             composition: Rc::new(VecBuilder::Push(arrow)),
@@ -211,10 +217,10 @@ enum ParserArrowF<T> {
     MatchString(fn(&T) -> char, Vec<char>),
 
     // Vec (A ~> B) -> A ~> B
-    Choice(Vec<Rc<ParserArrowF<T>>>),
+    Choice(Vec<Rc<ParserArrow<T>>>),
 
     // (A ~> B) -> A ~> String
-    ReturnString(Rc<ParserArrowF<T>>),
+    ReturnString(Rc<ParserArrow<T>>),
 }
 
 impl<T> Clone for ParserArrowF<T> {
