@@ -267,3 +267,12 @@ impl<T> Clone for ParserArrowF<T> {
         }
     }
 }
+
+#[test]
+fn test_arrow_parser() {
+    let input = "123";
+    let parser: Parser<String, char, char> = Parser::satisfy(|t| '0' <= *t && *t <= '9');
+    let mut token_stream = TokenStream::from_str(input);
+    let r = parser.run(&mut token_stream);
+    println!("{:?}", r);
+}
