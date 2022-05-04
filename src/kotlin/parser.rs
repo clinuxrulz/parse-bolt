@@ -1209,7 +1209,31 @@ pub fn class_parameter() -> Parser<String, char, data::ClassParameter> {
 }
 
 pub fn object_declaration() -> Parser<String, char, data::ObjectDeclaration> {
-    Parser::unimplemented()
+    lexer::seq2_skip_ws_nl(
+        &modifiers().optional(),
+        &lexer::seq_right_skip_ws_nl(
+            &lexer::object(),
+            &lexer::seq2_skip_ws_nl(
+                &simple_identifier(),
+                &lexer::seq2_skip_ws_nl(
+                    &lexer::seq_right_skip_ws_nl(
+                        &lexer::colon(),
+                        &delegation_specifiers()
+                    )
+                    .optional(),
+                    &class_body().optional(),
+                )
+            )
+        )
+    )
+    .map(|(modifiers_op, (simple_identifier, (delegation_specifiers_op, class_body_op)))| {
+        data::ObjectDeclaration {
+            modifiers_op,
+            simple_identifier,
+            delegation_specifiers_op,
+            class_body_op,
+        }
+    })
 }
 
 pub fn function_declaration() -> Parser<String, char, data::FunctionDeclaration> {
