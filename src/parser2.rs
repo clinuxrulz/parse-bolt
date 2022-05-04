@@ -170,15 +170,14 @@ enum VecBuilder<A> {
 
 fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<VecBuilder<A>>) -> Vec<A> {
     let mut r = Vec::new();
-    let mut stack = vec![Rc::clone(x)];
-    while let Some(at) = stack.pop() {
+    let mut queue = vec![Rc::clone(x)];
+    while queue.len() > 0 {
+        let at = queue.remove(0);
         match &*at {
             VecBuilder::Push(a) => r.push(a.clone()),
             VecBuilder::Append(lhs, rhs) => {
-                // Note: Not a bug. Push right then push left because things come off the stack in
-                //       the opposite order.
-                stack.push(Rc::clone(rhs));
-                stack.push(Rc::clone(lhs));
+                queue.push(Rc::clone(lhs));
+                queue.push(Rc::clone(lhs));
             }
         }
     }
