@@ -1221,7 +1221,7 @@ pub fn object_declaration() -> Parser<String, char, data::ObjectDeclaration> {
                         &delegation_specifiers()
                     )
                     .optional(),
-                    &class_body().optional(),
+                    &Parser::lazy(class_body).optional(),
                 )
             )
         )

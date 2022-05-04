@@ -205,7 +205,7 @@ impl<Err, T, A> Parser<Err, T, A> {
         T: std::fmt::Display + 'static,
         A: 'static,
     {
-        Parser::unordered_choice(vec![self.map(Some), Parser::empty().map(|_| None)])
+        Parser::choice(vec![self.map(Some), Parser::empty().map(|_| None)])
     }
 
     #[inline(always)]

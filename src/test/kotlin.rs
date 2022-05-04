@@ -49,7 +49,9 @@ fn test_kotlin_function_type() {
 fn test_kotlin_additive_expression() {
     let parser = kotlin::parser::additive_expression().seq_left(&Parser::eof());
     let input = "1 - 2 + 3";
+    let t = std::time::Instant::now();
     let r = parser.run_str(input);
+    println!("took {:?}ms", t.elapsed().as_millis());
     println!("{:?}", r);
     assert!(r.is_ok());
 }
