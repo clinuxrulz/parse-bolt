@@ -39,6 +39,15 @@ impl TokenStream<char> {
     }
 }
 
+impl<T> TokenStream<T> {
+    pub fn from_vec(tokens: Vec<T>) -> TokenStream<T> {
+        TokenStream {
+            tokens,
+            pos: 0,
+        }
+    }
+}
+
 pub struct Parser<Err, T, A> {
     base: Rc<dyn ParserBase<Err, T, A>>,
 }

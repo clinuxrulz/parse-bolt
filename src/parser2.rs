@@ -22,6 +22,7 @@ impl<Err, T, A> Clone for Parser<Err, T, A> {
 }
 
 impl<Err, T, A> Parser<Err, T, A> {
+    #[inline(always)]
     fn wrap_arrow(arrow: ParserArrow<T>) -> Parser<Err, T, A> {
         Parser {
             err_phantom: PhantomData,
@@ -30,7 +31,37 @@ impl<Err, T, A> Parser<Err, T, A> {
         }
     }
 
-    pub fn run(&self, tokens: &mut TokenStream<T>) -> Result<A, Err>
+    pub fn run(&self, str: &[char], len: usize, index: usize) -> Result<(A, usize), Err>
+    where
+        Err: From<String>,
+        T: From<char> + Clone + 'static,
+        A: 'static,
+    {
+        let str: String = str[index..index + len].iter().collect();
+        let tokens: Vec<T> = str.chars().map(Into::into).collect();
+        let mut token_stream = TokenStream::from_vec(tokens);
+        self.arrow.run(&mut token_stream).map(|a| {
+            let a: Box<A> = a.downcast().ok().unwrap();
+            (*a, token_stream.save())
+        })
+    }
+
+    pub fn run_str(&self, str: &str) -> Result<A, Err>
+    where
+        Err: From<String>,
+        T: From<char> + Clone + 'static,
+        A: 'static,
+    {
+        let tokens: Vec<T> = str.chars().map(Into::into).collect();
+        let mut token_stream = TokenStream::from_vec(tokens);
+        self.arrow.run(&mut token_stream).map(|a| {
+            let a: Box<A> = a.downcast().ok().unwrap();
+            *a
+        })
+    }
+
+    #[inline(always)]
+    pub fn run_token_stream(&self, tokens: &mut TokenStream<T>) -> Result<A, Err>
     where
         Err: From<String>,
         T: Clone + 'static,
@@ -42,6 +73,7 @@ impl<Err, T, A> Parser<Err, T, A> {
         })
     }
 
+    #[inline(always)]
     pub fn map<B: 'static, F: FnMut(A) -> B + 'static>(&self, mut f: F) -> Parser<Err, T, B>
     where
         A: 'static,
@@ -58,6 +90,51 @@ impl<Err, T, A> Parser<Err, T, A> {
         )
     }
 
+    #[inline(always)]
+    pub fn seq2<B>(&self, p2: &Parser<Err,T,B>) -> Parser<Err,T,(A,B)>
+    where
+        A: 'static,
+        B: 'static,
+    {
+        Parser::wrap_arrow(
+            self.arrow
+                .clone()
+                .compose(&p2.map(|b| |a: A| (a,b)).arrow)
+        )
+    }
+
+
+    #[inline(always)]
+    pub fn seq_left<B: 'static>(&self, parser2: &Parser<Err, T, B>) -> Parser<Err, T, A>
+    where
+        Err: 'static,
+        T: 'static,
+        A: Clone + 'static,
+    {
+        self.seq2(parser2).map(|(a, _)| a)
+    }
+
+    #[inline(always)]
+    pub fn seq_right<B: 'static>(&self, parser2: &Parser<Err, T, B>) -> Parser<Err, T, B>
+    where
+        Err: 'static,
+        T: 'static,
+        A: Clone + 'static,
+    {
+        self.seq2(parser2).map(|(_, b)| b)
+    }
+
+    #[inline(always)]
+    pub fn optional(&self) -> Parser<Err, T, Option<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: 'static,
+    {
+        Parser::choice(vec![self.map(Some), Parser::empty().map(|_| None)])
+    }
+
+    #[inline(always)]
     pub fn choice(parsers: Vec<Parser<Err,T,A>>) -> Parser<Err,T,A> {
         Parser::wrap_arrow(
             ParserArrow::choice(
@@ -283,8 +360,9 @@ impl<T> Clone for ParserArrowF<T> {
 #[test]
 fn test_arrow_parser() {
     let input = "123";
-    let parser: Parser<String, char, char> = Parser::satisfy(|t| '0' <= *t && *t <= '9');
-    let mut token_stream = TokenStream::from_str(input);
-    let r = parser.run(&mut token_stream);
+    let parser: Parser<String, char, _> =
+        Parser::satisfy(|t| '0' <= *t && *t <= '9')
+            .seq2(&Parser::satisfy(|t| *t != '2'));
+    let r = parser.run_str(input);
     println!("{:?}", r);
 }
