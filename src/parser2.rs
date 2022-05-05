@@ -96,11 +96,7 @@ impl<Err, T, A> Parser<Err, T, A> {
         A: 'static,
         B: 'static,
     {
-        Parser::wrap_arrow(
-            self.arrow
-                .clone()
-                .compose(&p2.map(|b| |a: A| (a,b)).arrow)
-        )
+        todo!("Need ParserArrow::first() to implement this.")
     }
 
 
@@ -170,14 +166,15 @@ enum VecBuilder<A> {
 
 fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<VecBuilder<A>>) -> Vec<A> {
     let mut r = Vec::new();
-    let mut queue = vec![Rc::clone(x)];
-    while queue.len() > 0 {
-        let at = queue.remove(0);
+    let mut stack = vec![Rc::clone(x)];
+    while let Some(at) = stack.pop() {
         match &*at {
             VecBuilder::Push(a) => r.push(a.clone()),
             VecBuilder::Append(lhs, rhs) => {
-                queue.push(Rc::clone(lhs));
-                queue.push(Rc::clone(rhs));
+                // Note: This is not a bug, the rhs gets pushed first before the lhs, because
+                //       they get poped off the stack in the reverse order.
+                stack.push(Rc::clone(rhs));
+                stack.push(Rc::clone(lhs));
             }
         }
     }
