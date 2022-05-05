@@ -41,10 +41,7 @@ impl TokenStream<char> {
 
 impl<T> TokenStream<T> {
     pub fn from_vec(tokens: Vec<T>) -> TokenStream<T> {
-        TokenStream {
-            tokens,
-            pos: 0,
-        }
+        TokenStream { tokens, pos: 0 }
     }
 }
 
