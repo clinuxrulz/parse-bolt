@@ -40,8 +40,8 @@ impl<Err, T, A> Parser<Err, T, A> {
         let str: String = str[index..index + len].iter().collect();
         let tokens: Vec<T> = str.chars().map(Into::into).collect();
         let mut token_stream = TokenStream::from_vec(tokens);
-        self.arrow.run(&mut token_stream).map(|a| {
-            let a: Box<A> = a.downcast().ok().unwrap();
+        self.arrow.run(&mut token_stream, Box::new(())).map(|a| {
+            let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
             (*a, token_stream.save())
         })
     }
@@ -54,8 +54,8 @@ impl<Err, T, A> Parser<Err, T, A> {
     {
         let tokens: Vec<T> = str.chars().map(Into::into).collect();
         let mut token_stream = TokenStream::from_vec(tokens);
-        self.arrow.run(&mut token_stream).map(|a| {
-            let a: Box<A> = a.downcast().ok().unwrap();
+        self.arrow.run(&mut token_stream, Box::new(())).map(|a| {
+            let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
             *a
         })
     }
@@ -67,24 +67,24 @@ impl<Err, T, A> Parser<Err, T, A> {
         T: Clone + 'static,
         A: 'static,
     {
-        self.arrow.run(tokens).map(|a| {
-            let a: Box<A> = a.downcast().ok().unwrap();
+        self.arrow.run(tokens, Box::new(())).map(|a| {
+            let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
             *a
         })
     }
 
     #[inline(always)]
-    pub fn map<B: 'static, F: FnMut(A) -> B + 'static>(&self, mut f: F) -> Parser<Err, T, B>
+    pub fn map<B: Clone + 'static, F: FnMut(A) -> B + 'static>(&self, mut f: F) -> Parser<Err, T, B>
     where
         A: 'static,
     {
         Parser::wrap_arrow(
             self.arrow
                 .clone()
-                .compose(&ParserArrow::lift(Rc::new(RefCell::new(
-                    move |a: Box<dyn Any>| {
-                        let a: Box<A> = a.downcast().ok().unwrap();
-                        Box::new(f(*a)) as Box<dyn Any>
+                .compose(&ParserArrow::arr(Rc::new(RefCell::new(
+                    move |a: Box<dyn CloneableAny>| {
+                        let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
+                        Box::new(f(*a)) as Box<dyn CloneableAny>
                     },
                 )))),
         )
@@ -93,10 +93,37 @@ impl<Err, T, A> Parser<Err, T, A> {
     #[inline(always)]
     pub fn seq2<B>(&self, p2: &Parser<Err,T,B>) -> Parser<Err,T,(A,B)>
     where
-        A: 'static,
-        B: 'static,
+        A: Clone + 'static,
+        B: Clone + 'static,
     {
-        todo!("Need ParserArrow::first() to implement this.")
+        Parser::wrap_arrow(
+            ParserArrow::arr(Rc::new(RefCell::new(|x: Box<dyn CloneableAny>| Box::new(CloneableAnyTuple(x.clone_any(), x)) as Box<dyn CloneableAny>)))
+                .compose(&ParserArrow::first(Rc::new(self.arrow.clone())))
+                .compose(
+                    &ParserArrow::arr(Rc::new(RefCell::new(|x: Box<dyn CloneableAny>| {
+                        let mut x: Box<CloneableAnyTuple> = x.into_box_any().downcast().ok().unwrap();
+                        std::mem::swap(&mut x.0, &mut x.1);
+                        return x as Box<dyn CloneableAny>;
+                    })))
+                )
+                .compose(&ParserArrow::first(Rc::new(p2.arrow.clone())))
+                .compose(
+                    &ParserArrow::arr(Rc::new(RefCell::new(|x: Box<dyn CloneableAny>| {
+                        let mut x: Box<CloneableAnyTuple> = x.into_box_any().downcast().ok().unwrap();
+                        std::mem::swap(&mut x.0, &mut x.1);
+                        return x as Box<dyn CloneableAny>;
+                    })))
+                )
+                .compose(
+                    &ParserArrow::arr(Rc::new(RefCell::new(|x: Box<dyn CloneableAny>| {
+                        let x: Box<CloneableAnyTuple> = x.into_box_any().downcast().ok().unwrap();
+                        let a: Box<A> = x.0.into_box_any().downcast().ok().unwrap();
+                        let b: Box<B> = x.1.into_box_any().downcast().ok().unwrap();
+                        let r: Box<(A,B)> = Box::new((*a, *b));
+                        return r as Box<dyn CloneableAny>;
+                    })))
+                )
+        )
     }
 
 
@@ -106,6 +133,7 @@ impl<Err, T, A> Parser<Err, T, A> {
         Err: 'static,
         T: 'static,
         A: Clone + 'static,
+        B: Clone + 'static,
     {
         self.seq2(parser2).map(|(a, _)| a)
     }
@@ -116,6 +144,7 @@ impl<Err, T, A> Parser<Err, T, A> {
         Err: 'static,
         T: 'static,
         A: Clone + 'static,
+        B: Clone + 'static,
     {
         self.seq2(parser2).map(|(_, b)| b)
     }
@@ -125,7 +154,7 @@ impl<Err, T, A> Parser<Err, T, A> {
     where
         Err: Clone + From<String> + 'static,
         T: std::fmt::Display + 'static,
-        A: 'static,
+        A: Clone + 'static,
     {
         Parser::choice(vec![self.map(Some), Parser::empty().map(|_| None)])
     }
@@ -193,14 +222,51 @@ impl<T> Clone for ParserArrow<T> {
     }
 }
 
+
+trait CloneableAny {
+    fn clone_any(&self) -> Box<dyn CloneableAny>;
+    fn into_box_any(self: Box<Self>) -> Box<dyn Any>;
+}
+
+impl<Obj: Clone + 'static> CloneableAny for Obj {
+    fn clone_any(&self) -> Box<dyn CloneableAny> {
+        Box::new(self.clone())
+    }
+    fn into_box_any(self: Box<Self>) -> Box<dyn Any> {
+        self as Box<dyn Any>
+    }
+}
+
+struct CloneableAnyTuple(pub Box<dyn CloneableAny>, pub Box<dyn CloneableAny>);
+
+impl CloneableAny for CloneableAnyTuple {
+    fn clone_any(&self) -> Box<dyn CloneableAny> {
+        Box::new(CloneableAnyTuple(self.0.clone_any(), self.1.clone_any()))
+    }
+    fn into_box_any(self: Box<Self>) -> Box<dyn Any> {
+        self as Box<dyn Any>
+    }
+}
+
 impl<T> ParserArrow<T> {
-    fn run<Err>(&self, tokens: &mut TokenStream<T>) -> Result<Box<dyn Any>,Err> where Err: From<String>, T: Clone + 'static {
+    fn run<Err>(&self, tokens: &mut TokenStream<T>, mut val: Box<dyn CloneableAny>) -> Result<Box<dyn CloneableAny>,Err> where Err: From<String>, T: Clone + 'static {
         let instructions = rc_vec_builder_into_vec(&self.composition);
-        let mut val = Box::new(()) as Box<dyn Any>;
         for instruction in instructions {
             match instruction {
-                ParserArrowF::Lift(f) => {
+                ParserArrowF::Arr(f) => {
                     val = f.borrow_mut()(val);
+                }
+                ParserArrowF::First(arrow) => {
+                    let mut val2: Box<CloneableAnyTuple> = val.into_box_any().downcast().ok().unwrap();
+                    match arrow.run(tokens, val2.0) {
+                        Ok(r) => {
+                            val2.0 = r;
+                        },
+                        Err(error) => {
+                            return Err(error);
+                        }
+                    }
+                    val = val2;
                 }
                 ParserArrowF::Empty => {}
                 ParserArrowF::Eof => {
@@ -213,7 +279,7 @@ impl<T> ParserArrow<T> {
                     let t_op = tokens.read();
                     if let Some(t) = t_op {
                         if pred.borrow_mut()(&t) {
-                            val = Box::new(t) as Box<dyn Any>;
+                            val = Box::new(t) as Box<dyn CloneableAny>;
                         } else {
                             return Err("fail".to_owned().into());
                         }
@@ -239,7 +305,7 @@ impl<T> ParserArrow<T> {
                     let mut found = false;
                     for arrow in arrows {
                         tokens.restore(pos);
-                        let r: Result<_,Err> = arrow.run(tokens);
+                        let r: Result<_,Err> = arrow.run(tokens, val.clone_any());
                         if let Ok(a) = r {
                             found = true;
                             val = a;
@@ -252,7 +318,7 @@ impl<T> ParserArrow<T> {
                 }
                 ParserArrowF::ReturnString(t_to_char, arrow) => {
                     let start_pos = tokens.save();
-                    let r = arrow.run(tokens);
+                    let r = arrow.run(tokens, val);
                     if let Err(error) = r {
                         return Err(error);
                     }
@@ -265,6 +331,7 @@ impl<T> ParserArrow<T> {
                         }
                     }
                     tokens.restore(end_pos);
+                    val = Box::new(str);
                 }
             }
         }
@@ -277,8 +344,12 @@ impl<T> ParserArrow<T> {
         }
     }
 
-    fn lift(f: Rc<RefCell<dyn FnMut(Box<dyn Any>) -> Box<dyn Any>>>) -> ParserArrow<T> {
-        ParserArrow::lift_f(ParserArrowF::Lift(f))
+    fn arr(f: Rc<RefCell<dyn FnMut(Box<dyn CloneableAny>) -> Box<dyn CloneableAny>>>) -> ParserArrow<T> {
+        ParserArrow::lift_f(ParserArrowF::Arr(f))
+    }
+
+    fn first(arrow: Rc<ParserArrow<T>>) -> ParserArrow<T> {
+        ParserArrow::lift_f(ParserArrowF::First(arrow))
     }
 
     fn empty() -> ParserArrow<T> {
@@ -316,7 +387,10 @@ impl<T> ParserArrow<T> {}
 // ParserArrow Err T A B = A ~> B
 enum ParserArrowF<T> {
     // (A -> B) -> A ~> B
-    Lift(Rc<RefCell<dyn FnMut(Box<dyn Any>) -> Box<dyn Any>>>),
+    Arr(Rc<RefCell<dyn FnMut(Box<dyn CloneableAny>) -> Box<dyn CloneableAny>>>),
+
+    // (A ~> B) -> (A,C) ~> (B,C)
+    First(Rc<ParserArrow<T>>),
 
     // () -> () ~> ()
     Empty,
@@ -340,6 +414,8 @@ enum ParserArrowF<T> {
 impl<T> Clone for ParserArrowF<T> {
     fn clone(&self) -> Self {
         match self {
+            &ParserArrowF::Arr(ref f) => ParserArrowF::Arr(Rc::clone(f)),
+            &ParserArrowF::First(ref arrow) => ParserArrowF::First(Rc::clone(arrow)),
             &ParserArrowF::Empty => ParserArrowF::Empty,
             &ParserArrowF::Eof => ParserArrowF::Eof,
             &ParserArrowF::Satisfy(ref pred) => ParserArrowF::Satisfy(Rc::clone(pred)),
@@ -350,7 +426,6 @@ impl<T> Clone for ParserArrowF<T> {
                 ParserArrowF::Choice(arrows.iter().map(Rc::clone).collect())
             }
             &ParserArrowF::ReturnString(ref token_to_char, ref arrow) => ParserArrowF::ReturnString(*token_to_char, Rc::clone(arrow)),
-            &ParserArrowF::Lift(ref f) => ParserArrowF::Lift(Rc::clone(f)),
         }
     }
 }
