@@ -287,6 +287,7 @@ impl<Err, T> Parser<Err, T, ()> {
 enum VecBuilder<A> {
     Push(A),
     Append(Rc<VecBuilder<A>>, Rc<VecBuilder<A>>),
+    PushMany(Rc<Vec<A>>),
 }
 
 fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<VecBuilder<A>>) -> Vec<A> {
@@ -300,7 +301,12 @@ fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<VecBuilder<A>>) -> Vec<A> {
                 //       they get poped off the stack in the reverse order.
                 stack.push(Rc::clone(rhs));
                 stack.push(Rc::clone(lhs));
-            }
+            },
+            VecBuilder::PushMany(xs) => {
+                for x in &**xs as &Vec<A> {
+                    r.push((*x).clone());
+                }
+            },
         }
     }
     r
@@ -354,7 +360,8 @@ impl<T> ParserArrow<T> {
         T: Clone + 'static,
     {
         let instructions = rc_vec_builder_into_vec(&self.composition);
-        for instruction in instructions {
+        for i in 0..instructions.len() {
+            let instruction = &instructions[i];
             match instruction {
                 ParserArrowF::Lazy(arrow) => {
                     let arrow = arrow.borrow_mut()();
@@ -404,7 +411,7 @@ impl<T> ParserArrow<T> {
                     for c in chars {
                         let t_op = tokens.read();
                         if let Some(t) = t_op {
-                            if t_to_char(&t) != c {
+                            if t_to_char(&t) != *c {
                                 return Err("fail".to_owned().into());
                             }
                         } else {
@@ -413,21 +420,18 @@ impl<T> ParserArrow<T> {
                     }
                 }
                 ParserArrowF::Choice(arrows) => {
-                    // TODO: For backtracking, compose the arrows with the remaining instructions before executing them.
+                    let remaining_instructions: Rc<Vec<ParserArrowF<T>>> = Rc::new((&instructions[i+1..]).iter().map(Clone::clone).collect());
+                    let remaining_instructions_arrow = ParserArrow { composition: Rc::new(VecBuilder::PushMany(remaining_instructions)) };
                     let pos = tokens.save();
-                    let mut found = false;
                     for arrow in arrows {
+                        let backtracking_arrow = arrow.compose(&remaining_instructions_arrow);
                         tokens.restore(pos);
-                        let r: Result<_, Err> = arrow.run(tokens, val.clone_any());
+                        let r: Result<_, Err> = backtracking_arrow.run(tokens, val.clone_any());
                         if let Ok(a) = r {
-                            found = true;
-                            val = a;
-                            break;
+                            return Ok(a);
                         }
                     }
-                    if !found {
-                        return Err("fail".to_owned().into());
-                    }
+                    return Err("fail".to_owned().into());
                 }
                 ParserArrowF::ReturnString(t_to_char, arrow) => {
                     let start_pos = tokens.save();
@@ -573,12 +577,13 @@ fn test_arrow_parser() {
             .seq2(&Parser::satisfy(|t| *t == '2'))
             .seq2(&Parser::satisfy(|t| *t == '3').one_or_more_vec())
             .seq2(&Parser::satisfy(|t| *t == '4'))
+            .seq2(&Parser::satisfy(|t| *t == '4'))
             .map(|_| ()),
         Parser::match_string("ab"),
     ])
     .return_string();
     {
-        let input = "1233334";
+        let input = "12333344";
         let r = parser.run_str(input);
         println!("{:?}", r);
     }
