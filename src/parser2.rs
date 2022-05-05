@@ -21,6 +21,11 @@ impl<Err, T, A> Clone for Parser<Err, T, A> {
     }
 }
 
+enum LinkList<A> {
+    Empty,
+    Cons(A, Rc<LinkList<A>>),
+}
+
 impl<Err, T, A> Parser<Err, T, A> {
     #[inline(always)]
     fn wrap_arrow(arrow: ParserArrow<T>) -> Parser<Err, T, A> {
@@ -177,6 +182,72 @@ impl<Err, T, A> Parser<Err, T, A> {
                 .map(|parser| Rc::new(parser.arrow.clone()))
                 .collect(),
         ))
+    }
+
+    #[inline(always)]
+    pub fn zero_or_more_vec(&self) -> Parser<Err, T, Vec<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        self.zero_or_more_vec_greedy()
+            .map(|mut xs| {
+                let mut xs2 = Vec::new();
+                while let &LinkList::Cons(ref x, ref xs3) = &*xs {
+                    xs2.push(x.clone());
+                    xs = Rc::clone(xs3);
+                }
+                xs2
+            })
+    }
+
+    #[inline(always)]
+    pub fn one_or_more_vec(&self) -> Parser<Err, T, Vec<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        self.seq2(&self.zero_or_more_vec()).map(|(x, mut xs)| {
+            xs.insert(0, x);
+            xs
+        })
+    }
+
+    #[inline(always)]
+    fn zero_or_more_vec_greedy(&self) -> Parser<Err, T, Rc<LinkList<A>>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        let self2 = self.clone();
+        Parser::choice(vec![
+            self.seq2(&Parser::lazy(move || self2.zero_or_more_vec_greedy())).map(move |(x, xs)| {
+                Rc::new(LinkList::Cons(x, Rc::clone(&xs)))
+            }),
+            Parser::empty().map(move |_| Rc::new(LinkList::Empty)),
+        ])
+    }
+
+    #[inline(always)]
+    pub fn exactly_vec(&self, n: usize) -> Parser<Err, T, Vec<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        if n == 0 {
+            return Parser::empty().map(|_| Vec::new());
+        } else {
+            return Parser::exactly_vec(&self, n - 1)
+                .seq2(self)
+                .map(|(mut xs, x)| {
+                    xs.push(x);
+                    xs
+                });
+        }
     }
 
     pub fn return_string(&self) -> Parser<Err, T, String>
@@ -500,12 +571,14 @@ fn test_arrow_parser() {
     let parser: Parser<String, char, _> = Parser::choice(vec![
         Parser::satisfy(|t| '0' <= *t && *t <= '9')
             .seq2(&Parser::satisfy(|t| *t == '2'))
+            .seq2(&Parser::satisfy(|t| *t == '3').one_or_more_vec())
+            .seq2(&Parser::satisfy(|t| *t == '4'))
             .map(|_| ()),
         Parser::match_string("ab"),
     ])
     .return_string();
     {
-        let input = "123";
+        let input = "1233334";
         let r = parser.run_str(input);
         println!("{:?}", r);
     }
