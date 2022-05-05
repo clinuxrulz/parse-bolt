@@ -167,6 +167,13 @@ impl<Err, T, A> Parser<Err, T, A> {
             )
         )
     }
+
+    pub fn return_string(&self) -> Parser<Err,T,String>
+    where
+        T: Into<char> + Clone,
+    {
+        Parser::wrap_arrow(ParserArrow::return_string(Rc::new(self.arrow.clone())))
+    }
 }
 
 impl<Err, T> Parser<Err, T, T> {
@@ -185,6 +192,13 @@ impl<Err, T> Parser<Err, T, ()> {
         T: 'static,
     {
         Parser::wrap_arrow(ParserArrow::eof())
+    }
+
+    pub fn match_string(str: &str) -> Parser<Err, T, ()>
+    where
+        T: Into<char> + Clone,
+    {
+        Parser::wrap_arrow(ParserArrow::match_string(str.chars().collect()))
     }
 }
 
@@ -375,6 +389,13 @@ impl<T> ParserArrow<T> {
         ParserArrow::lift_f(ParserArrowF::Choice(arrows))
     }
 
+    fn return_string(arrow: Rc<ParserArrow<T>>) -> ParserArrow<T>
+    where
+        T: Clone + Into<char>,
+    {
+        ParserArrow::lift_f(ParserArrowF::ReturnString(|t: &T| t.clone().into(), arrow))
+    }
+
     // (a ~> b) -> (b ~> c) -> (a ~> c)
     fn compose(&self, other: &ParserArrow<T>) -> ParserArrow<T> {
         return ParserArrow { composition: Rc::new(VecBuilder::Append(Rc::clone(&self.composition), Rc::clone(&other.composition))) };
@@ -432,10 +453,22 @@ impl<T> Clone for ParserArrowF<T> {
 
 #[test]
 fn test_arrow_parser() {
-    let input = "123";
     let parser: Parser<String, char, _> =
-        Parser::satisfy(|t| '0' <= *t && *t <= '9')
-            .seq2(&Parser::satisfy(|t| *t == '2'));
-    let r = parser.run_str(input);
-    println!("{:?}", r);
+        Parser::choice(vec![
+            Parser::satisfy(|t| '0' <= *t && *t <= '9')
+                .seq2(&Parser::satisfy(|t| *t == '2'))
+                .map(|_| ()),
+            Parser::match_string("ab"),
+        ])
+        .return_string();
+    {
+        let input = "123";
+        let r = parser.run_str(input);
+        println!("{:?}", r);
+    }
+    {
+        let input = "ab";
+        let r = parser.run_str(input);
+        println!("{:?}", r);
+    }
 }
