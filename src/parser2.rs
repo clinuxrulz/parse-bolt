@@ -243,6 +243,19 @@ impl<Err, T, A> Parser<Err, T, A> {
     }
 
     #[inline(always)]
+    pub fn one_or_more_vec_unordered_choice(&self) -> Parser<Err, T, Vec<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        self.seq2(&self.zero_or_more_vec_unordered_choice()).map(|(x, mut xs)| {
+            xs.insert(0, x);
+            xs
+        })
+    }
+
+    #[inline(always)]
     pub fn zero_or_more_vec_unordered_choice(&self) -> Parser<Err, T, Vec<A>>
     where
         Err: Clone + From<String> + 'static,
@@ -855,7 +868,7 @@ fn test_arrow_parser_simple_1() {
 #[test]
 fn test_arrow_parser_simple_2() {
     let parser: Parser<String, _, _> = Parser::seq2(
-        &Parser::satisfy(|t| '0' <= *t && *t <= '9').zero_or_more_vec(),
+        &Parser::satisfy(|t| '0' <= *t && *t <= '9').zero_or_more_vec_unordered_choice(),
         &Parser::satisfy(|t| '0' <= *t && *t <= '9'),
     );
     let input = "9";
@@ -868,7 +881,7 @@ fn test_arrow_parser() {
     let parser: Parser<String, char, _> = Parser::choice(vec![
         Parser::satisfy(|t| '0' <= *t && *t <= '9')
             .seq2(&Parser::satisfy(|t| *t == '2'))
-            .seq2(&Parser::satisfy(|t| *t == '3').one_or_more_vec())
+            .seq2(&Parser::satisfy(|t| *t == '3').one_or_more_vec_unordered_choice())
             .seq2(&Parser::satisfy(|t| *t == '3'))
             .seq2(&Parser::satisfy(|t| *t == '4'))
             .map(|_| ()),
