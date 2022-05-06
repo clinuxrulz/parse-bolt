@@ -9,7 +9,7 @@ pub mod python;
 mod test;
 mod token_stream;
 
-pub use self::parser2::Parser as Parser;
+pub use self::parser2::Parser;
 //pub use self::parser::Parser;
 //pub use self::parser::Parser2 as ExperimentalParser;
 //pub use self::parser::TokenStream;

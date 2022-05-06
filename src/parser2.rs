@@ -277,16 +277,23 @@ impl<Err, T, A> Parser<Err, T, A> {
         Parser::wrap_arrow(ParserArrow::return_string(Rc::new(self.arrow.clone())))
     }
 
-    pub fn filter<Pred: FnMut(&A)->bool+'static>(&self, mut pred: Pred, err: Err) -> Parser<Err, T, A>
+    pub fn filter<Pred: FnMut(&A) -> bool + 'static>(
+        &self,
+        mut pred: Pred,
+        err: Err,
+    ) -> Parser<Err, T, A>
     where
         A: 'static,
     {
-        Parser::wrap_arrow(ParserArrow::filter(Rc::new(self.arrow.clone()), Rc::new(RefCell::new(move |x: &Box<dyn CloneableAny>| {
-            let x = (*x).clone_any();
-            let x: Box<dyn Any> = x.into_box_any();
-            let x: &A = x.downcast_ref().unwrap();
-            pred(x)
-        }))))
+        Parser::wrap_arrow(ParserArrow::filter(
+            Rc::new(self.arrow.clone()),
+            Rc::new(RefCell::new(move |x: &Box<dyn CloneableAny>| {
+                let x = (*x).clone_any();
+                let x: Box<dyn Any> = x.into_box_any();
+                let x: &A = x.downcast_ref().unwrap();
+                pred(x)
+            })),
+        ))
     }
 
     pub fn unimplemented() -> Parser<Err, T, A> {
@@ -307,7 +314,7 @@ impl<Err, T> Parser<Err, T, T> {
     }
 
     pub fn any() -> Parser<Err, T, T> {
-        return Parser::satisfy(|_| true)
+        return Parser::satisfy(|_| true);
     }
 }
 
@@ -415,7 +422,7 @@ impl<T> ParserArrow<T> {
             RunArrow(Rc<ParserArrow<T>>),
             RunArrowF(ParserArrowF<T>),
             MakeStringFromPosIntoVal(fn(&T) -> char, usize),
-            FilterVal(Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>)->bool>>),
+            FilterVal(Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>) -> bool>>),
             InjectFirstHalfOfTuple(BoxedCloneable),
             SuspendError,
             UnsuspendError,
@@ -577,7 +584,7 @@ impl<T> ParserArrow<T> {
                         ParserArrowF::Filter(arrow, pred) => {
                             instruction_stack.push(Instruction::FilterVal(pred));
                             instruction_stack.push(Instruction::RunArrow(arrow));
-                        },
+                        }
                         ParserArrowF::Unimplemented => {
                             unimplemented!();
                         }
@@ -690,7 +697,10 @@ impl<T> ParserArrow<T> {
         ParserArrow::lift_f(ParserArrowF::ReturnString(|t: &T| t.clone().into(), arrow))
     }
 
-    fn filter(arrow: Rc<ParserArrow<T>>, pred: Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>)->bool>>) -> ParserArrow<T> {
+    fn filter(
+        arrow: Rc<ParserArrow<T>>,
+        pred: Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>) -> bool>>,
+    ) -> ParserArrow<T> {
         ParserArrow::lift_f(ParserArrowF::Filter(arrow, pred))
     }
 
@@ -741,7 +751,10 @@ enum ParserArrowF<T> {
     ReturnString(fn(&T) -> char, Rc<ParserArrow<T>>),
 
     // (A ~> B) -> (B -> Bool) -> (A ~> B)
-    Filter(Rc<ParserArrow<T>>,Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>)->bool>>),
+    Filter(
+        Rc<ParserArrow<T>>,
+        Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>) -> bool>>,
+    ),
 
     // A ~> !
     Unimplemented,
@@ -767,7 +780,7 @@ impl<T> Clone for ParserArrowF<T> {
             }
             &ParserArrowF::Filter(ref arrow, ref pred) => {
                 ParserArrowF::Filter(Rc::clone(arrow), Rc::clone(pred))
-            },
+            }
             &ParserArrowF::Unimplemented => ParserArrowF::Unimplemented,
         }
     }
