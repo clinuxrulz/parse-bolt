@@ -365,98 +365,180 @@ impl<T> ParserArrow<T> {
         Err: From<String>,
         T: Clone + 'static,
     {
-        let instructions = rc_vec_builder_into_vec(&self.composition);
-        for i in 0..instructions.len() {
-            let instruction = &instructions[i];
-            match instruction {
-                ParserArrowF::Lazy(arrow) => {
-                    let arrow = arrow.borrow_mut()();
-                    match arrow.run(tokens, val) {
-                        Ok(r) => val = r,
-                        Err(error) => {
-                            return Err(error);
+        struct BoxedCloneable {
+            x: Box<dyn CloneableAny>,
+        }
+        impl Clone for BoxedCloneable {
+            fn clone(&self) -> Self {
+                BoxedCloneable { x: self.x.clone_any() }
+            }
+        }
+        #[derive(Clone)]
+        enum Instruction<T> {
+            RunArrow(Rc<ParserArrow<T>>),
+            RunArrowF(ParserArrowF<T>),
+            MakeStringFromPosIntoVal(fn(&T)->char,usize),
+            PushVal,
+            PopVal,
+            InjectFirstHalfOfTuple(BoxedCloneable),
+            SuspendError,
+            UnsuspendError,
+        }
+        let mut run_arrow_stack: Vec<(usize, Box<dyn CloneableAny>, Rc<ParserArrow<T>>, Rc<Vec<Instruction<T>>>)> = Vec::new();
+        let mut value_stack: Vec<Box<dyn CloneableAny>> = Vec::new();
+        let mut instruction_stack = Vec::new();
+        let mut last_error_op: Option<(usize, Err)> = None;
+        let mut suspended_error_op: Option<(usize, Err)> = None;
+        fn assign_error_if_further<Err>(last_error_op: Option<(usize, Err)>, pos: usize, err: Err) -> Option<(usize, Err)> {
+            if let Some((pos2, _)) = &last_error_op {
+                if *pos2 < pos {
+                    return Some((pos, err));
+                } else {
+                    return last_error_op;
+                }
+            } else if last_error_op.is_none() {
+                return Some((pos, err));
+            } else {
+                return last_error_op;
+            }
+        }
+        run_arrow_stack.push((tokens.save(), Box::new(()), Rc::new(self.clone()), Rc::new(Vec::new())));
+        'arrow_loop: while let Some((pos, start_val, arrow, init_instruction_stack)) = run_arrow_stack.pop() {
+            val = start_val;
+            tokens.restore(pos);
+            instruction_stack.clear();
+            for instruction in &*init_instruction_stack as &Vec<Instruction<T>> {
+                instruction_stack.push(instruction.clone())
+            }
+            instruction_stack.push(Instruction::RunArrow(arrow));
+            'instruction_loop: while let Some(instruction) = instruction_stack.pop() {
+                match instruction {
+                    Instruction::RunArrow(arrow) => {
+                        let arrowf_vec = rc_vec_builder_into_vec(&arrow.composition);
+                        for arrow_f in arrowf_vec.into_iter().rev() {
+                            instruction_stack.push(Instruction::RunArrowF(arrow_f));
                         }
-                    }
-                }
-                ParserArrowF::Arr(f) => {
-                    val = f.borrow_mut()(val);
-                }
-                ParserArrowF::First(arrow) => {
-                    let mut val2: Box<CloneableAnyTuple> =
-                        val.into_box_any().downcast().ok().unwrap();
-                    match arrow.run(tokens, val2.0) {
-                        Ok(r) => {
-                            val2.0 = r;
-                        }
-                        Err(error) => {
-                            return Err(error);
-                        }
-                    }
-                    val = val2;
-                }
-                ParserArrowF::Empty => {}
-                ParserArrowF::Eof => {
-                    let t_op = tokens.read();
-                    if t_op.is_some() {
-                        return Err("fail".to_owned().into());
-                    }
-                }
-                ParserArrowF::Satisfy(pred) => {
-                    let t_op = tokens.read();
-                    if let Some(t) = t_op {
-                        if pred.borrow_mut()(&t) {
-                            val = Box::new(t) as Box<dyn CloneableAny>;
-                        } else {
-                            return Err("fail".to_owned().into());
-                        }
-                    } else {
-                        return Err("fail".to_owned().into());
-                    }
-                }
-                ParserArrowF::MatchString(t_to_char, chars) => {
-                    for c in chars {
-                        let t_op = tokens.read();
-                        if let Some(t) = t_op {
-                            if t_to_char(&t) != *c {
-                                return Err("fail".to_owned().into());
+                    },
+                    Instruction::RunArrowF(arrow_instruction) => {
+                        match arrow_instruction {
+                            ParserArrowF::Lazy(arrow) => {
+                                let arrow = arrow.borrow_mut()();
+                                instruction_stack.push(Instruction::RunArrow(arrow));
                             }
-                        } else {
-                            return Err("fail".to_owned().into());
+                            ParserArrowF::Arr(f) => {
+                                val = f.borrow_mut()(val);
+                            }
+                            ParserArrowF::First(arrow) => {
+                                let val2: Box<CloneableAnyTuple> = val.into_box_any().downcast().ok().unwrap();
+                                val = val2.0;
+                                let second_part = val2.1;
+                                instruction_stack.push(Instruction::InjectFirstHalfOfTuple(BoxedCloneable { x: second_part }));
+                                instruction_stack.push(Instruction::RunArrow(arrow));
+                            }
+                            ParserArrowF::Empty => {}
+                            ParserArrowF::Eof => {
+                                let t_op = tokens.read();
+                                if t_op.is_some() {
+                                    last_error_op = assign_error_if_further(last_error_op, tokens.save(), "Expected end of file".to_owned().into());
+                                    break 'instruction_loop;
+                                }
+                            }
+                            ParserArrowF::Satisfy(pred) => {
+                                let t_op = tokens.read();
+                                if let Some(t) = t_op {
+                                    if pred.borrow_mut()(&t) {
+                                        val = Box::new(t) as Box<dyn CloneableAny>;
+                                    } else {
+                                        last_error_op = assign_error_if_further(last_error_op, tokens.save(), "Predicate failed".to_owned().into());
+                                        break 'instruction_loop;
+                                    }
+                                } else {
+                                    last_error_op = assign_error_if_further(last_error_op, tokens.save(), "Predicate failed".to_owned().into());
+                                    break 'instruction_loop;
+                                }
+                            }
+                            ParserArrowF::MatchString(t_to_char, chars) => {
+                                for c in chars {
+                                    let t_op = tokens.read();
+                                    if let Some(t) = t_op {
+                                        if t_to_char(&t) != c {
+                                            last_error_op = assign_error_if_further(last_error_op, tokens.save(), "fail".to_owned().into());
+                                            break 'instruction_loop;
+                                        }
+                                    } else {
+                                        last_error_op = assign_error_if_further(last_error_op, tokens.save(), "fail".to_owned().into());
+                                        break 'instruction_loop;
+                                    }
+                                }
+                            }
+                            ParserArrowF::Choice(arrows) => {
+                                let mut remaining_instructions = Vec::new();
+                                std::mem::swap(&mut remaining_instructions, &mut instruction_stack);
+                                remaining_instructions.push(Instruction::SuspendError);
+                                let remaining_instructions = Rc::new(remaining_instructions);
+                                let pos = tokens.save();
+                                run_arrow_stack.push(
+                                    (
+                                        pos,
+                                        val.clone_any(),
+                                        Rc::new(ParserArrow::empty()),
+                                        Rc::new(vec![Instruction::UnsuspendError])
+                                    )
+                                );
+                                for arrow in arrows.into_iter().rev() {
+                                    run_arrow_stack.push((pos, val.clone_any(), arrow, Rc::clone(&remaining_instructions)));
+                                }
+                                last_error_op = None;
+                                continue 'arrow_loop;
+                            }
+                            ParserArrowF::ReturnString(t_to_char, arrow) => {
+                                instruction_stack.push(Instruction::MakeStringFromPosIntoVal(t_to_char, tokens.save()));
+                                instruction_stack.push(Instruction::RunArrow(arrow));
+                            }
                         }
                     }
-                }
-                ParserArrowF::Choice(arrows) => {
-                    let remaining_instructions: Rc<Vec<ParserArrowF<T>>> = Rc::new((&instructions[i+1..]).iter().map(Clone::clone).collect());
-                    let remaining_instructions_arrow = ParserArrow { composition: Rc::new(VecBuilder::PushMany(remaining_instructions)) };
-                    let pos = tokens.save();
-                    for arrow in arrows {
-                        let backtracking_arrow = arrow.compose(&remaining_instructions_arrow);
-                        tokens.restore(pos);
-                        let r: Result<_, Err> = backtracking_arrow.run(tokens, val.clone_any());
-                        if let Ok(a) = r {
-                            return Ok(a);
+                    Instruction::MakeStringFromPosIntoVal(t_to_char, start_pos) => {
+                        let end_pos = tokens.save();
+                        tokens.restore(start_pos);
+                        let mut str = "".to_owned();
+                        for _i in start_pos..end_pos {
+                            if let Some(t) = tokens.read() {
+                                str.push(t_to_char(&t));
+                            }
                         }
+                        tokens.restore(end_pos);
+                        val = Box::new(str);
                     }
-                    return Err("fail".to_owned().into());
-                }
-                ParserArrowF::ReturnString(t_to_char, arrow) => {
-                    let start_pos = tokens.save();
-                    let r = arrow.run(tokens, val);
-                    if let Err(error) = r {
-                        return Err(error);
+                    Instruction::PushVal => {
+                        value_stack.push(val.clone_any());
                     }
-                    let end_pos = tokens.save();
-                    tokens.restore(start_pos);
-                    let mut str = "".to_owned();
-                    for _i in start_pos..end_pos {
-                        if let Some(t) = tokens.read() {
-                            str.push(t_to_char(&t));
+                    Instruction::PopVal => {
+                        val = value_stack.pop().unwrap();
+                    }
+                    Instruction::InjectFirstHalfOfTuple(second_part) => {
+                        val = Box::new(CloneableAnyTuple(val, second_part.x));
+                    }
+                    Instruction::SuspendError => {
+                        if let Some(last_error) = last_error_op {
+                            suspended_error_op = assign_error_if_further(suspended_error_op, last_error.0, last_error.1)
                         }
+                        last_error_op = None;
                     }
-                    tokens.restore(end_pos);
-                    val = Box::new(str);
+                    Instruction::UnsuspendError => {
+                        if let Some(suspended_error) = suspended_error_op {
+                            last_error_op = assign_error_if_further(last_error_op, suspended_error.0, suspended_error.1);
+                        }
+                        suspended_error_op = None;
+                    }
                 }
             }
+            if instruction_stack.is_empty() {
+                break;
+            }
+        }
+        if let Some((pos, error)) = last_error_op {
+            tokens.restore(pos);
+            return Err(error);
         }
         return Ok(val);
     }
@@ -577,6 +659,18 @@ impl<T> Clone for ParserArrowF<T> {
 }
 
 #[test]
+fn test_arrow_parser_simple_1() {
+    let parser: Parser<String,_,_> =
+        Parser::choice(vec![
+            Parser::satisfy(|t| '0' <= *t && *t <= '9'),
+            Parser::satisfy(|t| 'A' <= *t && *t <= 'Z'),
+        ]);
+    let input = "E";
+    let r = parser.run_str(input);
+    println!("{:?}", r);
+}
+
+#[test]
 fn test_arrow_parser() {
     let parser: Parser<String, char, _> = Parser::choice(vec![
         Parser::satisfy(|t| '0' <= *t && *t <= '9')
@@ -595,6 +689,11 @@ fn test_arrow_parser() {
     }
     {
         let input = "ab";
+        let r = parser.run_str(input);
+        println!("{:?}", r);
+    }
+    {
+        let input = "777";
         let r = parser.run_str(input);
         println!("{:?}", r);
     }
