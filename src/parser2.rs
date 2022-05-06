@@ -261,6 +261,18 @@ impl<Err, T, A> Parser<Err, T, A> {
     {
         Parser::wrap_arrow(ParserArrow::return_string(Rc::new(self.arrow.clone())))
     }
+
+    pub fn filter<Pred: FnMut(&A)->bool+'static>(&self, mut pred: Pred, err: Err) -> Parser<Err, T, A>
+    where
+        A: 'static,
+    {
+        Parser::wrap_arrow(ParserArrow::filter(Rc::new(self.arrow.clone()), Rc::new(RefCell::new(move |x: &Box<dyn CloneableAny>| {
+            let x = (*x).clone_any();
+            let x: Box<dyn Any> = x.into_box_any();
+            let x: &A = x.downcast_ref().unwrap();
+            pred(x)
+        }))))
+    }
 }
 
 impl<Err, T> Parser<Err, T, T> {
@@ -387,8 +399,7 @@ impl<T> ParserArrow<T> {
             RunArrow(Rc<ParserArrow<T>>),
             RunArrowF(ParserArrowF<T>),
             MakeStringFromPosIntoVal(fn(&T) -> char, usize),
-            PushVal,
-            PopVal,
+            FilterVal(Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>)->bool>>),
             InjectFirstHalfOfTuple(BoxedCloneable),
             SuspendError,
             UnsuspendError,
@@ -399,7 +410,6 @@ impl<T> ParserArrow<T> {
             Rc<ParserArrow<T>>,
             Rc<Vec<Instruction<T>>>,
         )> = Vec::new();
-        let mut value_stack: Vec<Box<dyn CloneableAny>> = Vec::new();
         let mut instruction_stack = Vec::new();
         let mut last_error_op: Option<(usize, Err)> = None;
         let mut suspended_error_op: Option<(usize, Err)> = None;
@@ -548,6 +558,10 @@ impl<T> ParserArrow<T> {
                             ));
                             instruction_stack.push(Instruction::RunArrow(arrow));
                         }
+                        ParserArrowF::Filter(arrow, pred) => {
+                            instruction_stack.push(Instruction::FilterVal(pred));
+                            instruction_stack.push(Instruction::RunArrow(arrow));
+                        }
                     },
                     Instruction::MakeStringFromPosIntoVal(t_to_char, start_pos) => {
                         let end_pos = tokens.save();
@@ -561,11 +575,15 @@ impl<T> ParserArrow<T> {
                         tokens.restore(end_pos);
                         val = Box::new(str);
                     }
-                    Instruction::PushVal => {
-                        value_stack.push(val.clone_any());
-                    }
-                    Instruction::PopVal => {
-                        val = value_stack.pop().unwrap();
+                    Instruction::FilterVal(pred) => {
+                        if !pred.borrow_mut()(&val) {
+                            last_error_op = assign_error_if_further(
+                                last_error_op,
+                                tokens.save(),
+                                "Parser::filter failed".to_owned().into(),
+                            );
+                            break 'instruction_loop;
+                        }
                     }
                     Instruction::InjectFirstHalfOfTuple(second_part) => {
                         val = Box::new(CloneableAnyTuple(val, second_part.x));
@@ -653,6 +671,10 @@ impl<T> ParserArrow<T> {
         ParserArrow::lift_f(ParserArrowF::ReturnString(|t: &T| t.clone().into(), arrow))
     }
 
+    fn filter(arrow: Rc<ParserArrow<T>>, pred: Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>)->bool>>) -> ParserArrow<T> {
+        ParserArrow::lift_f(ParserArrowF::Filter(arrow, pred))
+    }
+
     // (a ~> b) -> (b ~> c) -> (a ~> c)
     fn compose(&self, other: &ParserArrow<T>) -> ParserArrow<T> {
         return ParserArrow {
@@ -694,6 +716,9 @@ enum ParserArrowF<T> {
 
     // (A ~> B) -> A ~> String
     ReturnString(fn(&T) -> char, Rc<ParserArrow<T>>),
+
+    // (A ~> B) -> (B -> Bool) -> (A ~> B)
+    Filter(Rc<ParserArrow<T>>,Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>)->bool>>),
 }
 
 impl<T> Clone for ParserArrowF<T> {
@@ -713,6 +738,9 @@ impl<T> Clone for ParserArrowF<T> {
             }
             &ParserArrowF::ReturnString(ref token_to_char, ref arrow) => {
                 ParserArrowF::ReturnString(*token_to_char, Rc::clone(arrow))
+            }
+            &ParserArrowF::Filter(ref arrow, ref pred) => {
+                ParserArrowF::Filter(Rc::clone(arrow), Rc::clone(pred))
             }
         }
     }
