@@ -759,19 +759,15 @@ pub fn dec_digit_no_zero() -> Parser<String, char, char> {
     Parser::satisfy(|t| '1' <= *t && *t <= '9')
 }
 
-pub fn dec_digit_or_separator() -> Parser<String, char, char> {
-    choice_lazy!(dec_digit(), Parser::match_('_'),)
-}
-
 pub fn dec_digits() -> Parser<String, char, String> {
-    choice_lazy!(
-        dec_digit()
-            .seq2(&dec_digit_or_separator().zero_or_more_vec())
-            .seq2(&dec_digit())
-            .map_to(()),
-        dec_digit().map_to(())
-    )
-    .return_string()
+    dec_digit().one_or_more_vec()
+        .seq2(
+            &Parser::match_('_').optional()
+                .seq2(&dec_digit().one_or_more_vec())
+                .zero_or_more_vec()
+        )
+        .map_to(())
+        .return_string()
 }
 
 pub fn double_exponent() -> Parser<String, char, String> {
@@ -805,14 +801,15 @@ pub fn double_literal() -> Parser<String, char, String> {
 }
 
 pub fn integer_literal() -> Parser<String, char, String> {
-    choice_lazy!(
-        dec_digit_no_zero()
-            .seq2(&dec_digit_or_separator().zero_or_more_vec())
-            .seq2(&dec_digit())
-            .map_to(()),
-        dec_digit().map_to(())
-    )
-    .return_string()
+    dec_digit_no_zero()
+        .seq2(&dec_digit().zero_or_more_vec())
+        .seq2(
+            &Parser::match_('_').optional()
+                .seq2(&dec_digit().one_or_more_vec())
+                .zero_or_more_vec()
+        )
+        .map_to(())
+        .return_string()
 }
 
 pub fn hex_literal() -> Parser<String, char, String> {
