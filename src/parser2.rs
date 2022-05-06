@@ -671,6 +671,18 @@ fn test_arrow_parser_simple_1() {
 }
 
 #[test]
+fn test_arrow_parser_simple_2() {
+    let parser: Parser<String,_,_> =
+        Parser::seq2(
+            &Parser::satisfy(|t| '0' <= *t && *t <= '9').optional(),
+            &Parser::satisfy(|t| '0' <= *t && *t <= '9'),
+        );
+    let input = "9";
+    let r = parser.run_str(input);
+    println!("{:?}", r);
+}
+
+#[test]
 fn test_arrow_parser() {
     let parser: Parser<String, char, _> = Parser::choice(vec![
         Parser::satisfy(|t| '0' <= *t && *t <= '9')
