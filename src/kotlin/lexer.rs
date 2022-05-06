@@ -44,7 +44,7 @@ pub fn hidden() -> Parser<String, char, ()> {
     choice_lazy!(delimited_comment(), line_comment(), ws().map_to(()),)
 }
 
-pub fn seq2_skip<A: Clone + 'static, B: 'static, Skip: Clone + 'static>(
+pub fn seq2_skip<A: Clone + 'static, B: Clone + 'static, Skip: Clone + 'static>(
     parser1: &Parser<String, char, A>,
     parser2: &Parser<String, char, B>,
     skip_p: &Parser<String, char, Skip>,
@@ -53,42 +53,42 @@ pub fn seq2_skip<A: Clone + 'static, B: 'static, Skip: Clone + 'static>(
     parser1.seq_left(&skip_p.zero_or_more_vec()).seq2(parser2)
 }
 
-pub fn seq2_skip_ws<A: Clone + 'static, B: 'static>(
+pub fn seq2_skip_ws<A: Clone + 'static, B: Clone + 'static>(
     parser1: &Parser<String, char, A>,
     parser2: &Parser<String, char, B>,
 ) -> Parser<String, char, (A, B)> {
     seq2_skip(parser1, parser2, &hidden())
 }
 
-pub fn seq_left_skip_ws<A: Clone + 'static, B: 'static>(
+pub fn seq_left_skip_ws<A: Clone + 'static, B: Clone + 'static>(
     parser1: &Parser<String, char, A>,
     parser2: &Parser<String, char, B>,
 ) -> Parser<String, char, A> {
     seq2_skip_ws(parser1, parser2).map(|(a, _b)| a)
 }
 
-pub fn seq_right_skip_ws<A: Clone + 'static, B: 'static>(
+pub fn seq_right_skip_ws<A: Clone + 'static, B: Clone + 'static>(
     parser1: &Parser<String, char, A>,
     parser2: &Parser<String, char, B>,
 ) -> Parser<String, char, B> {
     seq2_skip_ws(parser1, parser2).map(|(_a, b)| b)
 }
 
-pub fn seq2_skip_ws_nl<A: Clone + 'static, B: 'static>(
+pub fn seq2_skip_ws_nl<A: Clone + 'static, B: Clone + 'static>(
     parser1: &Parser<String, char, A>,
     parser2: &Parser<String, char, B>,
 ) -> Parser<String, char, (A, B)> {
     seq2_skip(parser1, parser2, &choice_lazy!(hidden(), nl()))
 }
 
-pub fn seq_left_skip_ws_nl<A: Clone + 'static, B: 'static>(
+pub fn seq_left_skip_ws_nl<A: Clone + 'static, B: Clone + 'static>(
     parser1: &Parser<String, char, A>,
     parser2: &Parser<String, char, B>,
 ) -> Parser<String, char, A> {
     seq2_skip_ws_nl(parser1, parser2).map(|(a, _b)| a)
 }
 
-pub fn seq_right_skip_ws_nl<A: Clone + 'static, B: 'static>(
+pub fn seq_right_skip_ws_nl<A: Clone + 'static, B: Clone + 'static>(
     parser1: &Parser<String, char, A>,
     parser2: &Parser<String, char, B>,
 ) -> Parser<String, char, B> {

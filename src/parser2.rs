@@ -1,4 +1,4 @@
-use crate::parser::TokenStream;
+use super::TokenStream;
 
 use std::any::Any;
 use std::cell::RefCell;
@@ -192,6 +192,11 @@ impl<Err, T, A> Parser<Err, T, A> {
     }
 
     #[inline(always)]
+    pub fn unordered_choice(parsers: Vec<Parser<Err, T, A>>) -> Parser<Err, T, A> {
+        Parser::choice(parsers)
+    }
+
+    #[inline(always)]
     pub fn zero_or_more_vec(&self) -> Parser<Err, T, Vec<A>>
     where
         Err: Clone + From<String> + 'static,
@@ -219,6 +224,16 @@ impl<Err, T, A> Parser<Err, T, A> {
             xs.insert(0, x);
             xs
         })
+    }
+
+    #[inline(always)]
+    pub fn zero_or_more_vec_unordered_choice(&self) -> Parser<Err, T, Vec<A>>
+    where
+        Err: Clone + From<String> + 'static,
+        T: std::fmt::Display + 'static,
+        A: Clone + 'static,
+    {
+        self.zero_or_more_vec()
     }
 
     #[inline(always)]
@@ -273,11 +288,26 @@ impl<Err, T, A> Parser<Err, T, A> {
             pred(x)
         }))))
     }
+
+    pub fn unimplemented() -> Parser<Err, T, A> {
+        Parser::wrap_arrow(ParserArrow::unimplemented())
+    }
 }
 
 impl<Err, T> Parser<Err, T, T> {
-    pub fn satisfy<Pred: FnMut(&T) -> bool + 'static>(mut pred: Pred) -> Parser<Err, T, T> {
+    pub fn satisfy<Pred: FnMut(&T) -> bool + 'static>(pred: Pred) -> Parser<Err, T, T> {
         Parser::wrap_arrow(ParserArrow::satisfy(Rc::new(RefCell::new(pred))))
+    }
+
+    pub fn match_(t: T) -> Parser<Err, T, T>
+    where
+        T: PartialEq + 'static,
+    {
+        Parser::satisfy(move |t2| *t2 == t)
+    }
+
+    pub fn any() -> Parser<Err, T, T> {
+        return Parser::satisfy(|_| true)
     }
 }
 
@@ -304,7 +334,6 @@ impl<Err, T> Parser<Err, T, ()> {
 enum VecBuilder<A> {
     Push(A),
     Append(Rc<VecBuilder<A>>, Rc<VecBuilder<A>>),
-    PushMany(Rc<Vec<A>>),
 }
 
 fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<VecBuilder<A>>) -> Vec<A> {
@@ -318,11 +347,6 @@ fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<VecBuilder<A>>) -> Vec<A> {
                 //       they get poped off the stack in the reverse order.
                 stack.push(Rc::clone(rhs));
                 stack.push(Rc::clone(lhs));
-            }
-            VecBuilder::PushMany(xs) => {
-                for x in &**xs as &Vec<A> {
-                    r.push((*x).clone());
-                }
             }
         }
     }
@@ -367,14 +391,6 @@ impl CloneableAny for CloneableAnyTuple {
 }
 
 impl<T> ParserArrow<T> {
-    fn optimise(&self) -> ParserArrow<T> {
-        ParserArrow {
-            composition: Rc::new(VecBuilder::PushMany(Rc::new(rc_vec_builder_into_vec(
-                &self.composition,
-            )))),
-        }
-    }
-
     fn run<Err>(
         &self,
         tokens: &mut TokenStream<T>,
@@ -561,6 +577,9 @@ impl<T> ParserArrow<T> {
                         ParserArrowF::Filter(arrow, pred) => {
                             instruction_stack.push(Instruction::FilterVal(pred));
                             instruction_stack.push(Instruction::RunArrow(arrow));
+                        },
+                        ParserArrowF::Unimplemented => {
+                            unimplemented!();
                         }
                     },
                     Instruction::MakeStringFromPosIntoVal(t_to_char, start_pos) => {
@@ -675,6 +694,10 @@ impl<T> ParserArrow<T> {
         ParserArrow::lift_f(ParserArrowF::Filter(arrow, pred))
     }
 
+    fn unimplemented() -> ParserArrow<T> {
+        ParserArrow::lift_f(ParserArrowF::Unimplemented)
+    }
+
     // (a ~> b) -> (b ~> c) -> (a ~> c)
     fn compose(&self, other: &ParserArrow<T>) -> ParserArrow<T> {
         return ParserArrow {
@@ -719,6 +742,9 @@ enum ParserArrowF<T> {
 
     // (A ~> B) -> (B -> Bool) -> (A ~> B)
     Filter(Rc<ParserArrow<T>>,Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>)->bool>>),
+
+    // A ~> !
+    Unimplemented,
 }
 
 impl<T> Clone for ParserArrowF<T> {
@@ -741,7 +767,8 @@ impl<T> Clone for ParserArrowF<T> {
             }
             &ParserArrowF::Filter(ref arrow, ref pred) => {
                 ParserArrowF::Filter(Rc::clone(arrow), Rc::clone(pred))
-            }
+            },
+            &ParserArrowF::Unimplemented => ParserArrowF::Unimplemented,
         }
     }
 }

@@ -1681,7 +1681,7 @@ pub fn multi_variable_declaration() -> Parser<String, char, data::MultiVariableD
 
 pub fn statements() -> Parser<String, char, data::Statements> {
     lexer::seq_left_skip_ws_nl(
-        &lexer::zero_or_more_sep_by_skip_ws_nl(&statement(), &semis()),
+        &lexer::zero_or_more_sep_by_skip_ws_nl(&Parser::lazy(statement), &semis()),
         &semis().optional(),
     )
     .map(data::Statements)
