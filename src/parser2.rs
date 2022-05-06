@@ -1,3 +1,4 @@
+use super::Pos;
 use super::TokenStream;
 
 use std::any::Any;
@@ -38,7 +39,7 @@ impl<Err, T, A> Parser<Err, T, A> {
 
     pub fn run(&self, str: &[char], len: usize, index: usize) -> Result<(A, usize), Err>
     where
-        Err: From<String>,
+        Err: Clone + From<String>,
         T: From<char> + Clone + 'static,
         A: 'static,
     {
@@ -47,13 +48,13 @@ impl<Err, T, A> Parser<Err, T, A> {
         let mut token_stream = TokenStream::from_vec(tokens);
         self.arrow.run(&mut token_stream).map(|a| {
             let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
-            (*a, token_stream.save())
-        })
+            (*a, token_stream.save().offset)
+        }).map_err(|(_,err)| err)
     }
 
     pub fn run_str(&self, str: &str) -> Result<A, Err>
     where
-        Err: From<String>,
+        Err: Clone + From<String>,
         T: From<char> + Clone + 'static,
         A: 'static,
     {
@@ -62,20 +63,20 @@ impl<Err, T, A> Parser<Err, T, A> {
         self.arrow.run(&mut token_stream).map(|a| {
             let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
             *a
-        })
+        }).map_err(|(_,err)| err)
     }
 
     #[inline(always)]
     pub fn run_token_stream(&self, tokens: &mut TokenStream<T>) -> Result<A, Err>
     where
-        Err: From<String>,
+        Err: Clone + From<String>,
         T: Clone + 'static,
         A: 'static,
     {
         self.arrow.run(tokens).map(|a| {
             let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
             *a
-        })
+        }).map_err(|(_,err)| err)
     }
 
     #[inline(always)]
@@ -435,10 +436,10 @@ impl CloneableAny for CloneableAnyTuple {
 }
 
 impl<T> ParserArrow<T> {
-    fn run<Err>(
+    fn run<Err: Clone>(
         &self,
         tokens: &mut TokenStream<T>,
-    ) -> Result<Box<dyn CloneableAny>, Err>
+    ) -> Result<Box<dyn CloneableAny>, (Pos, Err)>
     where
         Err: From<String>,
         T: Clone + 'static,
@@ -457,27 +458,26 @@ impl<T> ParserArrow<T> {
         enum Instruction<T> {
             RunArrow(Rc<ParserArrow<T>>),
             RunArrowF(ParserArrowF<T>),
-            MakeStringFromPosIntoVal(fn(&T) -> char, usize),
+            MakeStringFromPosIntoVal(fn(&T) -> char, Pos),
             FilterVal(Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>) -> bool>>),
             InjectFirstHalfOfTuple(BoxedCloneable),
-            IfErrorTryOtherArrows(usize,BoxedCloneable,Vec<Rc<ParserArrow<T>>>),
+            IfErrorTryOtherArrows(Pos,BoxedCloneable,Vec<Rc<ParserArrow<T>>>),
         }
         let mut run_arrow_stack: Vec<(
-            usize,
+            Pos,
             Box<dyn CloneableAny>,
             Rc<ParserArrow<T>>,
             Rc<Vec<Instruction<T>>>,
         )> = Vec::new();
         let mut instruction_stack = Vec::new();
-        //let mut last_error_op: Option<(usize, Err)> = None;
-        //let mut suspended_error_op: Option<(usize, Err)> = None;
+        let mut furthest_error_op: Option<(Pos,Err)> = None;
         fn assign_error_if_further<Err>(
-            last_error_op: Option<(usize, Err)>,
-            pos: usize,
+            last_error_op: Option<(Pos, Err)>,
+            pos: Pos,
             err: Err,
-        ) -> Option<(usize, Err)> {
+        ) -> Option<(Pos, Err)> {
             if let Some((pos2, _)) = &last_error_op {
-                if *pos2 < pos {
+                if pos2.offset < pos.offset {
                     return Some((pos, err));
                 } else {
                     return last_error_op;
@@ -489,7 +489,11 @@ impl<T> ParserArrow<T> {
             }
         }
         run_arrow_stack.push((
-            0,
+            Pos {
+                offset: 0,
+                line: 1,
+                col: 1,
+            },
             Box::new(()),
             Rc::new(self.clone()),
             Rc::new(Vec::new()),
@@ -637,7 +641,7 @@ impl<T> ParserArrow<T> {
                             let end_pos = tokens.save();
                             tokens.restore(start_pos);
                             let mut str = "".to_owned();
-                            for _i in start_pos..end_pos {
+                            for _i in start_pos.offset..end_pos.offset {
                                 if let Some(t) = tokens.read() {
                                     str.push(t_to_char(&t));
                                 }
@@ -673,11 +677,20 @@ impl<T> ParserArrow<T> {
                     }
                 }
             }
+            if let Err(error) = &result {
+                furthest_error_op = assign_error_if_further(furthest_error_op, tokens.save(), (*error).clone());
+            }
             if instruction_stack.is_empty() && result.is_ok() {
                 break;
             }
         }
-        return result;
+        if result.is_err() {
+            if let Some((pos, error)) = furthest_error_op {
+                println!("error at: {:?}", pos);
+                return Err((pos, error));
+            }
+        }
+        return result.map_err(|err| (tokens.save(), err));
     }
 
     fn lift_f(arrow: ParserArrowF<T>) -> ParserArrow<T> {

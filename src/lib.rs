@@ -13,6 +13,7 @@ pub use self::parser2::Parser;
 //pub use self::parser::Parser;
 //pub use self::parser::Parser2 as ExperimentalParser;
 //pub use self::parser::TokenStream;
+pub use self::token_stream::Pos;
 pub use self::token_stream::TokenStream;
 
 #[macro_export]
