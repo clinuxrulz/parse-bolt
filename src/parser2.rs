@@ -350,6 +350,12 @@ impl CloneableAny for CloneableAnyTuple {
 }
 
 impl<T> ParserArrow<T> {
+    fn optimise(&self) -> ParserArrow<T> {
+        ParserArrow {
+            composition: Rc::new(VecBuilder::PushMany(Rc::new(rc_vec_builder_into_vec(&self.composition))))
+        }
+    }
+
     fn run<Err>(
         &self,
         tokens: &mut TokenStream<T>,
