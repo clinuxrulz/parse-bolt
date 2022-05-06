@@ -592,7 +592,7 @@ impl<T> ParserArrow<T> {
                     }
                 }
             }
-            if instruction_stack.is_empty() {
+            if instruction_stack.is_empty() && last_error_op.is_none() {
                 break;
             }
         }
@@ -732,7 +732,7 @@ fn test_arrow_parser_simple_1() {
 #[test]
 fn test_arrow_parser_simple_2() {
     let parser: Parser<String, _, _> = Parser::seq2(
-        &Parser::satisfy(|t| '0' <= *t && *t <= '9').optional(),
+        &Parser::satisfy(|t| '0' <= *t && *t <= '9').zero_or_more_vec(),
         &Parser::satisfy(|t| '0' <= *t && *t <= '9'),
     );
     let input = "9";
@@ -746,7 +746,7 @@ fn test_arrow_parser() {
         Parser::satisfy(|t| '0' <= *t && *t <= '9')
             .seq2(&Parser::satisfy(|t| *t == '2'))
             .seq2(&Parser::satisfy(|t| *t == '3').one_or_more_vec())
-            .seq2(&Parser::satisfy(|t| *t == '4'))
+            .seq2(&Parser::satisfy(|t| *t == '3'))
             .seq2(&Parser::satisfy(|t| *t == '4'))
             .map(|_| ()),
         Parser::match_string("ab"),
