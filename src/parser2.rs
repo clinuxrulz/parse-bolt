@@ -686,7 +686,6 @@ impl<T> ParserArrow<T> {
         }
         if result.is_err() {
             if let Some((pos, error)) = furthest_error_op {
-                println!("error at: {:?}", pos);
                 return Err((pos, error));
             }
         }
