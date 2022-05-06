@@ -174,7 +174,7 @@ pub fn indented_block<A: Clone + 'static>(
     after_ident_line_parser: Parser<String, char, A>,
 ) -> Parser<String, char, Vec<A>> {
     let ws2: Parser<String, char, char> =
-        Parser::unordered_choice(vec![Parser::match_(' '), Parser::match_('\t')]);
+        Parser::choice(vec![Parser::match_(' '), Parser::match_('\t')]);
     let ws_count = Rc::new(RefCell::new(0));
     let count_ws;
     {
@@ -198,7 +198,7 @@ pub fn indented_block<A: Clone + 'static>(
 }
 
 pub fn expression() -> Parser<String, char, Expression> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         disjunction()
             .seq2(
                 &ws_one_or_more()
@@ -322,7 +322,7 @@ pub fn comparison() -> Parser<String, char, Comparison> {
 }
 
 pub fn compare_op() -> Parser<String, char, CompareOp> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         ws_zero_or_more()
             .seq2(&Parser::match_string("=="))
             .map(|_| CompareOp::Eq),
@@ -438,7 +438,7 @@ pub fn shift_expr() -> Parser<String, char, ShiftExpr> {
 }
 
 pub fn shift_operator() -> Parser<String, char, ShiftOperator> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         Parser::match_string("<<").map(|_| ShiftOperator::ShiftLeft),
         Parser::match_string(">>").map(|_| ShiftOperator::ShiftRight),
     ])
@@ -457,7 +457,7 @@ pub fn sum() -> Parser<String, char, Sum> {
 }
 
 pub fn sum_operator() -> Parser<String, char, SumOperator> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         Parser::match_('+').map(|_| SumOperator::Add),
         Parser::match_('-').map(|_| SumOperator::Subtract),
     ])
@@ -476,7 +476,7 @@ pub fn term() -> Parser<String, char, Term> {
 }
 
 pub fn term_operator() -> Parser<String, char, TermOperator> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         Parser::match_('*').map(|_| TermOperator::Multiply),
         Parser::match_string("//").map(|_| TermOperator::DivideThenRoundInt),
         Parser::match_('/').map(|_| TermOperator::Divide),
@@ -486,7 +486,7 @@ pub fn term_operator() -> Parser<String, char, TermOperator> {
 }
 
 pub fn factor() -> Parser<String, char, Factor> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         Parser::match_('+')
             .seq_right(&Parser::lazy(factor))
             .map(|factor| Factor::Plus(Box::new(factor))),
@@ -501,7 +501,7 @@ pub fn factor() -> Parser<String, char, Factor> {
 }
 
 pub fn power() -> Parser<String, char, Power> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         await_primary()
             .seq_left(&ws_zero_or_more().seq2(&Parser::match_string("**").seq2(&ws_zero_or_more())))
             .seq2(&factor())
@@ -517,7 +517,7 @@ pub fn power() -> Parser<String, char, Power> {
 }
 
 pub fn await_primary() -> Parser<String, char, AwaitPrimary> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         await_().seq_right(&primary()).map(|primary| AwaitPrimary {
             is_await: true,
             primary,
@@ -534,7 +534,7 @@ pub fn primary() -> Parser<String, char, Primary> {
 }
 
 pub fn atom() -> Parser<String, char, Atom> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         true_().map(|_| Atom::True),
         false_().map(|_| Atom::False),
         none().map(|_| Atom::None),
@@ -582,7 +582,7 @@ pub fn none() -> Parser<String, char, ()> {
 }
 
 pub fn complex_number() -> Parser<String, char, (String, String)> {
-    signed_real_number().seq2(&ws_zero_or_more().seq_right(&Parser::unordered_choice(vec![
+    signed_real_number().seq2(&ws_zero_or_more().seq_right(&Parser::choice(vec![
                 Parser::match_('+')
                     .seq2(&ws_zero_or_more())
                     .seq_right(&imaginary_number()),
@@ -594,7 +594,7 @@ pub fn complex_number() -> Parser<String, char, (String, String)> {
 }
 
 pub fn signed_number() -> Parser<String, char, String> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         Parser::match_('-')
             .seq2(&number())
             .map(|(_, x)| format!("-{}", x)),
@@ -603,7 +603,7 @@ pub fn signed_number() -> Parser<String, char, String> {
 }
 
 pub fn signed_real_number() -> Parser<String, char, String> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         Parser::match_('-')
             .seq2(&real_number())
             .map(|(_, x)| format!("-{}", x)),
@@ -617,7 +617,7 @@ pub fn real_number() -> Parser<String, char, String> {
 
 pub fn imaginary_number() -> Parser<String, char, String> {
     number()
-        .seq2(&Parser::unordered_choice(vec![
+        .seq2(&Parser::choice(vec![
             Parser::match_('j'),
             Parser::match_('J'),
         ]))
@@ -625,7 +625,7 @@ pub fn imaginary_number() -> Parser<String, char, String> {
 }
 
 pub fn number() -> Parser<String, char, String> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         Parser::satisfy(|t| '0' <= *t && *t <= '9')
             .one_or_more_vec()
             .seq2(
@@ -664,7 +664,7 @@ pub fn ws_one_or_more() -> Parser<String, char, ()> {
 }
 
 pub fn newline() -> Parser<String, char, ()> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         Parser::match_string("\r\n"),    // <-- Windows
         Parser::match_('\n').map_to(()), // <--Linux
         Parser::match_('\r').map_to(()), // <-- Mac
@@ -672,7 +672,7 @@ pub fn newline() -> Parser<String, char, ()> {
 }
 
 pub fn ws() -> Parser<String, char, ()> {
-    Parser::unordered_choice(vec![
+    Parser::choice(vec![
         Parser::match_(' ').map_to(()),
         Parser::match_('\t').map_to(()),
         Parser::match_string("\\\n"),
