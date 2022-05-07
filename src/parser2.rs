@@ -340,15 +340,21 @@ impl<Err, T> Parser<Err, T, ()> {
 
 enum VecBuilder<A> {
     Push(A),
-    Append(Rc<VecBuilder<A>>, Rc<VecBuilder<A>>),
+    PushMany(Rc<Vec<A>>),
+    Append(Rc<RefCell<VecBuilder<A>>>, Rc<RefCell<VecBuilder<A>>>),
 }
 
-fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<VecBuilder<A>>) -> Vec<A> {
+fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<RefCell<VecBuilder<A>>>) -> Vec<A> {
     let mut r = Vec::new();
     let mut stack = vec![Rc::clone(x)];
     while let Some(at) = stack.pop() {
-        match &*at {
-            VecBuilder::Push(a) => r.push(a.clone()),
+        match &*at.borrow() {
+            VecBuilder::Push(a) => r.push((*a).clone()),
+            VecBuilder::PushMany(xs) => {
+                for x in &**xs {
+                    r.push((*x).clone());
+                }
+            }
             VecBuilder::Append(lhs, rhs) => {
                 // Note: This is not a bug, the rhs gets pushed first before the lhs, because
                 //       they get poped off the stack in the reverse order.
@@ -361,7 +367,14 @@ fn rc_vec_builder_into_vec<A: Clone>(x: &Rc<VecBuilder<A>>) -> Vec<A> {
 }
 
 struct ParserArrow<T> {
-    composition: Rc<VecBuilder<ParserArrowF<T>>>,
+    composition: Rc<RefCell<VecBuilder<ParserArrowF<T>>>>,
+}
+
+impl<T> ParserArrow<T> {
+    fn optimise(&self) {
+        let new_composition = VecBuilder::PushMany(Rc::new(rc_vec_builder_into_vec(&self.composition)));
+        *self.composition.borrow_mut() = new_composition;
+    }
 }
 
 impl<T> Clone for ParserArrow<T> {
@@ -472,6 +485,7 @@ impl<T> ParserArrow<T> {
             'instruction_loop: while let Some(instruction) = instruction_stack.pop() {
                 match instruction {
                     Instruction::RunArrow(arrow) => {
+                        arrow.optimise();
                         let arrowf_vec = rc_vec_builder_into_vec(&arrow.composition);
                         for arrow_f in arrowf_vec.into_iter().rev() {
                             instruction_stack.push(Instruction::RunArrowF(arrow_f));
@@ -649,7 +663,7 @@ impl<T> ParserArrow<T> {
 
     fn lift_f(arrow: ParserArrowF<T>) -> ParserArrow<T> {
         ParserArrow {
-            composition: Rc::new(VecBuilder::Push(arrow)),
+            composition: Rc::new(RefCell::new(VecBuilder::Push(arrow))),
         }
     }
 
@@ -711,10 +725,10 @@ impl<T> ParserArrow<T> {
     // (a ~> b) -> (b ~> c) -> (a ~> c)
     fn compose(&self, other: &ParserArrow<T>) -> ParserArrow<T> {
         return ParserArrow {
-            composition: Rc::new(VecBuilder::Append(
+            composition: Rc::new(RefCell::new(VecBuilder::Append(
                 Rc::clone(&self.composition),
                 Rc::clone(&other.composition),
-            )),
+            ))),
         };
     }
 }
