@@ -421,13 +421,6 @@ struct ParserArrow<T> {
     composition: Rc<RefCell<VecBuilder<ParserArrowF<T>>>>,
 }
 
-impl<T> ParserArrow<T> {
-    fn optimise(&self) {
-        let new_composition = VecBuilder::PushMany(Rc::new(rc_vec_builder_into_vec(&self.composition)));
-        *self.composition.borrow_mut() = new_composition;
-    }
-}
-
 impl<T> Clone for ParserArrow<T> {
     fn clone(&self) -> Self {
         ParserArrow {
@@ -462,6 +455,11 @@ impl CloneableAny for CloneableAnyTuple {
 }
 
 impl<T> ParserArrow<T> {
+    fn optimise(&self) {
+        let new_composition = VecBuilder::PushMany(Rc::new(rc_vec_builder_into_vec(&self.composition)));
+        *self.composition.borrow_mut() = new_composition;
+    }
+    
     fn run<Err: Clone>(
         &self,
         tokens: &mut TokenStream<T>,
