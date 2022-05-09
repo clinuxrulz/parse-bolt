@@ -34,7 +34,7 @@ impl<S> LrParser<S> {
                         items.push(Item { rule: index, index: 0, });
                     }
                 }
-                index += 0;
+                index += 1;
             }
         }
         let mut prediction: Vec<Item> = prediction.drain().collect();
