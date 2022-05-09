@@ -109,7 +109,7 @@ impl<S> LrParser<S> {
         let mut shifts: Vec<HashMap<S,usize>> = Vec::new();
         let mut reductions: Vec<ItemSet> = Vec::new();
         let mut k: usize = 0;
-        for item_set in item_sets.clone() {
+        while let Some(item_set) = item_sets.pop() {
             vectors.push(item_set.items.iter().map(|i| i.rule).collect());
             let pset = self.predict(item_set.items.clone());
             full_item_sets.push(pset.clone());
