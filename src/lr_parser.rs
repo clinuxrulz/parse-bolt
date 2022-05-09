@@ -1,4 +1,5 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
+use std::hash::Hash;
 
 // https://boxbase.org/entries/2019/oct/14/lr1-parsing-tables/
 
@@ -49,6 +50,28 @@ impl<S> LrParser<S> {
             items: prediction,
         };
     }
+
+    pub fn partition(&self, items: &ItemSet) -> Vec<(Option<S>,ItemSet)> where S: Clone + PartialEq + Eq + Hash, {
+        let mut groups: HashMap<Option<S>,Vec<Item>> = HashMap::new();
+        for item in &items.items {
+            let mut item = *item;
+            let sym_op = self.after_dot(item.rule, item.index);
+            if sym_op.is_some() {
+                item = Item { rule: item.rule, index: item.index + 1 };
+            }
+            if let Some(items) = groups.get_mut(&sym_op) {
+                items.push(item);
+            } else {
+                groups.insert(sym_op, vec![item]);
+            }
+        }
+        let mut result: Vec<(Option<S>,ItemSet)> = Vec::new();
+        for group in groups {
+            let mut items: HashSet<Item> = group.1.iter().map(Item::clone).collect();
+            result.push((group.0, ItemSet { items: items.drain().collect() }));
+        }
+        result
+    }
 }
 
 pub struct Grammar<S>(Vec<Rule<S>>);
@@ -79,7 +102,7 @@ pub struct GrammarRefPrefixAndItemRef<'a,S> {
 
 pub struct GrammarRefIndexAndItemSetRef<'a,S> {
     grammar_ref: &'a Grammar<S>,
-    index: usize,
+    prefix: String,
     item_set: &'a ItemSet,
 }
 
@@ -137,7 +160,7 @@ impl<'a, S: std::fmt::Display> std::fmt::Display for GrammarRefPrefixAndItemRef<
 
 impl<'a, S: std::fmt::Display> std::fmt::Display for GrammarRefIndexAndItemSetRef<'a, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let first_prefix = format!("{}: ", self.index);
+        let first_prefix = format!("{}: ", self.prefix);
         let other_prefixes: String = (0..first_prefix.len()).map(|_| ' ').collect();
         let mut is_first = true;
         for item in &self.item_set.items {
@@ -178,7 +201,17 @@ fn test_lr_parser() {
     let prediction = lr_parser.predict(vec![Item { rule: 0, index: 0 }]);
     println!("{}", GrammarRefIndexAndItemSetRef {
         grammar_ref: &lr_parser.grammar,
-        index: 0,
-        item_set: &prediction
+        prefix: "0: ".to_owned(),
+        item_set: &prediction,
     });
+    println!("---");
+    let partition = lr_parser.partition(&prediction);
+    println!("parition:");
+    for (sym_op, item_set) in partition {
+        print!("{}", GrammarRefIndexAndItemSetRef {
+            grammar_ref: &lr_parser.grammar,
+            prefix: sym_op.unwrap_or("None").to_owned(),
+            item_set: &item_set,
+        });
+    }
 }
