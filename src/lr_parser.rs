@@ -1,8 +1,54 @@
+use std::collections::HashSet;
+
 // https://boxbase.org/entries/2019/oct/14/lr1-parsing-tables/
 
 pub struct LrParser<S> {
     grammar: Grammar<S>,
     lexemes: Lexemes<S>,
+}
+
+impl<S> LrParser<S> {
+    pub fn after_dot(&self, rule: usize, index: usize) -> Option<S> where S: Clone {
+        let rule = &self.grammar.0[rule];
+        if index < rule.parts.len() {
+            Some(rule.parts[index].clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn predict(&self, mut items: Vec<Item>) -> ItemSet where S: Clone + PartialEq {
+        let mut prediction: HashSet<Item> = HashSet::new();
+        for item in &items {
+            prediction.insert(*item);
+        }
+        let mut p = prediction.len();
+        while let Some(item) = items.pop() {
+            let sym_op = self.after_dot(item.rule, item.index);
+            let mut index: usize = 0;
+            for rule in &self.grammar.0 {
+                if sym_op.is_some() && sym_op == rule.name_op {
+                    prediction.insert(Item { rule: index, index: 0, });
+                    if p < prediction.len() {
+                        p = prediction.len();
+                        items.push(Item { rule: index, index: 0, });
+                    }
+                }
+                index += 0;
+            }
+        }
+        let mut prediction: Vec<Item> = prediction.drain().collect();
+        prediction.sort_by(|a, b| {
+            if a.rule == b.rule {
+                return a.index.cmp(&b.index);
+            } else {
+                return a.rule.cmp(&b.rule);
+            }
+        });
+        return ItemSet {
+            items: prediction,
+        };
+    }
 }
 
 pub struct Grammar<S>(Vec<Rule<S>>);
@@ -14,7 +60,7 @@ pub struct Rule<S> {
     parts: Vec<S>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Item {
     rule: usize,
     index: usize,
@@ -107,4 +153,30 @@ impl<'a, S: std::fmt::Display> std::fmt::Display for GrammarRefIndexAndItemSetRe
         }
         Ok(())
     }
+}
+
+#[test]
+fn test_lr_parser() {
+    let grammar = Grammar(vec![
+        Rule { name_op: None, parts: vec!["program"], },
+        Rule { name_op: Some("program"), parts: vec!["program", "declaration"], },
+        Rule { name_op: Some("declaration"), parts: vec!["varDecl"] },
+        Rule { name_op: Some("declaration"), parts: vec!["constDecl"] },
+        Rule { name_op: Some("declaration"), parts: vec!["statement"] },
+    ]);
+    let lexemes = Lexemes(vec![
+        "varDecl",
+        "constDecl",
+        "statement",
+    ]);
+    let lr_parser = LrParser {
+        grammar,
+        lexemes,
+    };
+    let prediction = lr_parser.predict(vec![Item { rule: 0, index: 0 }]);
+    println!("{}", GrammarRefIndexAndItemSetRef {
+        grammar_ref: &lr_parser.grammar,
+        index: 0,
+        item_set: &prediction
+    });
 }
