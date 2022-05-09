@@ -8,6 +8,26 @@ pub struct LrParser<S> {
     lexemes: Lexemes<S>,
 }
 
+pub struct Grammar<S>(Vec<Rule<S>>);
+
+pub struct Lexemes<S>(Vec<S>);
+
+pub struct Rule<S> {
+    name_op: Option<S>,
+    parts: Vec<S>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Item {
+    rule: usize,
+    index: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ItemSet {
+    items: Vec<Item>,
+}
+
 impl<S> LrParser<S> {
     pub fn after_dot(&self, rule: usize, index: usize) -> Option<S> where S: Clone {
         let rule = &self.grammar.0[rule];
@@ -72,26 +92,58 @@ impl<S> LrParser<S> {
         }
         result
     }
-}
 
-pub struct Grammar<S>(Vec<Rule<S>>);
-
-pub struct Lexemes<S>(Vec<S>);
-
-pub struct Rule<S> {
-    name_op: Option<S>,
-    parts: Vec<S>,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Item {
-    rule: usize,
-    index: usize,
-}
-
-#[derive(Clone)]
-pub struct ItemSet {
-    items: Vec<Item>,
+    pub fn compute_all_itemsets(&self) where S: Clone + std::fmt::Debug + PartialEq + Eq + Hash + std::fmt::Display {
+        let mut item_sets: Vec<ItemSet> = Vec::new();
+        item_sets.push(ItemSet { items: vec![Item { rule: 0, index: 0, }] });
+        let mut item_sets_index: HashMap<ItemSet,usize> = HashMap::new();
+        {
+            let mut index: usize = 0;
+            for item_set in &item_sets {
+                item_sets_index.insert(item_set.clone(), index);
+                index += 1;
+            }
+        }
+        let mut vectors: Vec<Vec<usize>> = Vec::new();
+        let mut full_item_sets: Vec<ItemSet> = Vec::new();
+        let mut shifts: Vec<HashMap<S,usize>> = Vec::new();
+        let mut reductions: Vec<ItemSet> = Vec::new();
+        let mut k: usize = 0;
+        for item_set in item_sets.clone() {
+            vectors.push(item_set.items.iter().map(|i| i.rule).collect());
+            let pset = self.predict(item_set.items.clone());
+            full_item_sets.push(pset.clone());
+            println!("{}", GrammarRefIndexAndItemSetRef {
+                grammar_ref: &self.grammar,
+                prefix: format!("{}", k),
+                item_set: &item_set
+            });
+            let mut k_shifts: HashMap<S,usize> = HashMap::new();
+            let mut k_reductions: HashSet<Item> = HashSet::new();
+            for (sym_op, items) in self.partition(&pset) {
+                if let Some(sym) = sym_op {
+                    let j;
+                    if let Some(j2) = item_sets_index.get(&items) {
+                        j = *j2;
+                    } else {
+                        j = item_sets.len();
+                        item_sets_index.insert(items.clone(), j);
+                        item_sets.push(items);
+                    }
+                    k_shifts.insert(sym, j);
+                } else {
+                    for item in items.items {
+                        k_reductions.insert(item);
+                    }
+                }
+            }
+            shifts.push(k_shifts);
+            reductions.push(ItemSet { items: k_reductions.drain().collect() });
+            k += 1;
+        }
+        println!("{:?}", shifts);
+        println!("{:?}", reductions);
+    }
 }
 
 pub struct GrammarRefPrefixAndItemRef<'a,S> {
@@ -214,4 +266,6 @@ fn test_lr_parser() {
             item_set: &item_set,
         });
     }
+    println!("---");
+    lr_parser.compute_all_itemsets();
 }
