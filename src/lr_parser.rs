@@ -109,14 +109,14 @@ impl<S> LrParser<S> {
         let mut shifts: Vec<HashMap<S,usize>> = Vec::new();
         let mut reductions: Vec<ItemSet> = Vec::new();
         let mut k: usize = 0;
-        while let Some(item_set) = item_sets.pop() {
+        while let Some(item_set) = if item_sets.is_empty() { None } else { Some(item_sets.remove(0)) } {
             vectors.push(item_set.items.iter().map(|i| i.rule).collect());
             let pset = self.predict(item_set.items.clone());
             full_item_sets.push(pset.clone());
-            println!("{}", GrammarRefIndexAndItemSetRef {
+            print!("{}", GrammarRefIndexAndItemSetRef {
                 grammar_ref: &self.grammar,
                 prefix: format!("{}", k),
-                item_set: &item_set
+                item_set: &pset
             });
             let mut k_shifts: HashMap<S,usize> = HashMap::new();
             let mut k_reductions: HashSet<Item> = HashSet::new();
