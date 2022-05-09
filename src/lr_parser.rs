@@ -160,6 +160,7 @@ impl<'a, S: std::fmt::Display> std::fmt::Display for GrammarRefIndexAndItemSetRe
 fn test_lr_parser() {
     let grammar = Grammar(vec![
         Rule { name_op: None, parts: vec!["program"], },
+        Rule { name_op: Some("program"), parts: vec![], },
         Rule { name_op: Some("program"), parts: vec!["program", "declaration"], },
         Rule { name_op: Some("declaration"), parts: vec!["varDecl"] },
         Rule { name_op: Some("declaration"), parts: vec!["constDecl"] },
