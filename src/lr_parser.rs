@@ -130,6 +130,7 @@ impl<'a, S: std::fmt::Display> std::fmt::Display for GrammarRefPrefixAndItemRef<
         if at_index == self.item.index {
             write!(f, " \u{2218}")?;
         }
+        writeln!(f, "")?;
         Ok(())
     }
 }
