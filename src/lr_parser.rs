@@ -28,21 +28,10 @@ pub struct ItemSet {
     items: Vec<Item>,
 }
 
-impl<S> Grammar<S> {
+impl<S> LrParser<S> {
     pub fn after_dot<'a>(&'a self, item: &'a Item) -> Option<&'a S> {
         let rule = &self.0[item.rule];
         rule.parts.get(item.index)
-    }
-}
-
-impl<S> LrParser<S> {
-    pub fn after_dot(&self, rule: usize, index: usize) -> Option<S> where S: Clone {
-        let rule = &self.grammar.0[rule];
-        if index < rule.parts.len() {
-            Some(rule.parts[index].clone())
-        } else {
-            None
-        }
     }
 
     pub fn predict(&self, mut items: Vec<Item>) -> ItemSet where S: Clone + PartialEq {
