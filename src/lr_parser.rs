@@ -29,9 +29,9 @@ pub struct ItemSet {
 }
 
 impl<S> LrParser<S> {
-    pub fn after_dot<'a>(&'a self, item: &'a Item) -> Option<&'a S> {
-        let rule = &self.0[item.rule];
-        rule.parts.get(item.index)
+    pub fn after_dot(&self, item: &Item) -> Option<S> where S: Clone {
+        let rule = &self.grammar.0[item.rule];
+        rule.parts.get(item.index).map(S::clone)
     }
 
     pub fn predict(&self, mut items: Vec<Item>) -> ItemSet where S: Clone + PartialEq {
@@ -41,7 +41,7 @@ impl<S> LrParser<S> {
         }
         let mut p = prediction.len();
         while let Some(item) = items.pop() {
-            let sym_op = self.after_dot(item.rule, item.index);
+            let sym_op = self.after_dot(&item);
             let mut index: usize = 0;
             for rule in &self.grammar.0 {
                 if sym_op.is_some() && sym_op == rule.name_op {
@@ -71,7 +71,7 @@ impl<S> LrParser<S> {
         let mut groups: HashMap<Option<S>,Vec<Item>> = HashMap::new();
         for item in &items.items {
             let mut item = *item;
-            let sym_op = self.after_dot(item.rule, item.index);
+            let sym_op = self.after_dot(&item);
             if sym_op.is_some() {
                 item = Item { rule: item.rule, index: item.index + 1 };
             }
@@ -212,7 +212,7 @@ impl<S> LrParser<S> {
         let mut seeds: HashMap<Option<S>,HashSet<(usize,usize)>> = HashMap::new();
         let mut routes: HashSet<(Option<S>,Option<S>)> = HashSet::new();
         for item in &full_item_set.items {
-            let sym0 = self.after_dot(item.rule, item.index);
+            let sym0 = self.after_dot(item);
             if !symbols.contains_key(&sym0) {
                 symbols.insert(sym0.clone(), HashSet::new());
                 seeds.insert(sym0, HashSet::new());
