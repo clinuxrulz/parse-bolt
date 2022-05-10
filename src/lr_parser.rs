@@ -93,7 +93,7 @@ impl<S> LrParser<S> {
         result
     }
 
-    pub fn compute_all_itemsets(&self) -> (Vec<ItemSet>,Vec<ItemSet>) where S: Clone + std::fmt::Debug + PartialEq + Eq + Hash + std::fmt::Display {
+    pub fn compute_all_itemsets(&self) -> (Vec<ItemSet>,Vec<ItemSet>,Vec<Vec<usize>>) where S: Clone + std::fmt::Debug + PartialEq + Eq + Hash + std::fmt::Display {
         let mut item_sets: Vec<ItemSet> = Vec::new();
         item_sets.push(ItemSet { items: vec![Item { rule: 0, index: 0, }] });
         let mut item_sets_index: HashMap<ItemSet,usize> = HashMap::new();
@@ -144,7 +144,7 @@ impl<S> LrParser<S> {
         }
         println!("{:?}", shifts);
         println!("{:?}", reductions);
-        return (item_sets, full_item_sets);
+        return (item_sets, full_item_sets,vectors);
     }
 
     pub fn empty_symbols(&self) -> HashSet<Option<S>> where S: Clone + PartialEq + Eq + Hash {
@@ -276,6 +276,27 @@ impl<S> LrParser<S> {
         }
         return (symbols, seeds);
     }
+
+    pub fn build_decision_table(k: usize, args: Vec<usize>, vectors: Vec<Vec<usize>>) {
+        let mut fin_index: HashMap<Vec<usize>,usize> = HashMap::new();
+        let mut fin_vectors: Vec<Vec<usize>> = Vec::new();
+        let mut fin_tabs: Vec<HashMap<Option<S>,Vec<usize>>> = Vec::new();
+        let mut conflicts: HashMap<(usize, Option<S>),Vec<usize>> = HashMap::new();
+        let mut tab_index = fin_vectors.len();
+        {
+            let mut tmp: Vec<usize> = Vec::with_capacity(args.len() + 1);
+            tmp.push(k);
+            for arg in &args {
+                tmp.push(*arg);
+            }
+            fin_index.insert(tmp, tab_index);
+        }
+        let mut tab: HashMap<Option<S>,Vec<usize>> = HashMap::new();
+        fin_tabs.push(tab);
+        assert_eq!(vectors[k].len(), args.len());
+        let mut seed_lookahead: HashMap<Vec<usize>,usize> = HashMap::new();
+        todo!();
+    }
 }
 
 pub struct GrammarRefPrefixAndItemRef<'a,S> {
@@ -399,7 +420,7 @@ fn test_lr_parser() {
         });
     }
     println!("---");
-    let (item_sets, full_item_sets) = lr_parser.compute_all_itemsets();
+    let (item_sets, full_item_sets, vectors) = lr_parser.compute_all_itemsets();
     println!("---");
     let first = lr_parser.first_lexemes();
     println!("{:?}", first);
