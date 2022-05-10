@@ -28,6 +28,13 @@ pub struct ItemSet {
     items: Vec<Item>,
 }
 
+impl<S> Grammar<S> {
+    pub fn after_dot<'a>(&'a self, item: &'a Item) -> Option<&'a S> {
+        let rule = &self.0[item.rule];
+        rule.parts.get(item.index)
+    }
+}
+
 impl<S> LrParser<S> {
     pub fn after_dot(&self, rule: usize, index: usize) -> Option<S> where S: Clone {
         let rule = &self.grammar.0[rule];
