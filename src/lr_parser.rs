@@ -165,6 +165,47 @@ impl<S> LrParser<S> {
         }
         symbols
     }
+
+    pub fn first_lexemes(&self) -> HashMap<Option<S>,HashSet<Option<S>>> where S: Clone + PartialEq + Eq + Hash {
+        let empty = self.empty_symbols();
+        let mut symbols: HashMap<Option<S>,HashSet<Option<S>>> = HashMap::new();
+        let mut routes: HashSet<(Option<S>,Option<S>)> = HashSet::new();
+        for sym in &self.lexemes.0 {
+            let mut tmp: HashSet<Option<S>> = HashSet::new();
+            tmp.insert(Some((*sym).clone()));
+            symbols.insert(Some((*sym).clone()), tmp);
+        }
+        for rule in &self.grammar.0 {
+            if !symbols.contains_key(&rule.name_op) {
+                symbols.insert(rule.name_op.clone(), HashSet::new());
+            }
+        }
+        for rule in &self.grammar.0 {
+            for rule_n in &rule.parts {
+                routes.insert((rule.name_op.clone(), Some(rule_n.clone())));
+                if !empty.contains(&Some(rule_n.clone())) {
+                    break;
+                }
+            }
+        }
+        let mut rep = true;
+        while rep {
+            rep = false;
+            for (lhs, rhs0) in &routes {
+                let n = symbols.get(lhs).map(HashSet::len).unwrap_or(0);
+                let to_add = symbols.get(rhs0).unwrap().clone();
+                if let Some(xs) = symbols.get_mut(lhs) {
+                    for symbol in to_add {
+                        xs.insert(symbol);
+                    }
+                } else {
+                    symbols.insert(lhs.clone(), to_add);
+                }
+                rep |= n < symbols.get(lhs).map(HashSet::len).unwrap_or(0);
+            }
+        }
+        return symbols;
+    }
 }
 
 pub struct GrammarRefPrefixAndItemRef<'a,S> {
@@ -289,4 +330,7 @@ fn test_lr_parser() {
     }
     println!("---");
     lr_parser.compute_all_itemsets();
+    println!("---");
+    let first = lr_parser.first_lexemes();
+    println!("{:?}", first);
 }
