@@ -206,6 +206,74 @@ impl<S> LrParser<S> {
         }
         return symbols;
     }
+
+    pub fn follow_lexemes(&self, seed_set: &HashSet<(usize,usize)>, full_item_set: &ItemSet) -> (HashMap<Option<S>, HashSet<Option<S>>>, HashMap<Option<S>, HashSet<(usize, usize)>>) where S: Clone + PartialEq + Eq + Hash {
+        let empty = self.empty_symbols();
+        let first = self.first_lexemes();
+        let mut symbols: HashMap<Option<S>,HashSet<Option<S>>> = HashMap::new();
+        let mut seeds: HashMap<Option<S>,HashSet<(usize,usize)>> = HashMap::new();
+        let mut routes: HashSet<(Option<S>,Option<S>)> = HashSet::new();
+        for item in &full_item_set.items {
+            let sym0 = self.after_dot(item.rule, item.index);
+            if !symbols.contains_key(&sym0) {
+                symbols.insert(sym0.clone(), HashSet::new());
+                seeds.insert(sym0, HashSet::new());
+            }
+        }
+        let mut rhs0: Option<S> = None;
+        for Item { rule, index } in &full_item_set.items {
+            let Rule { name_op: lhs, parts: rhs } = &self.grammar.0[*rule];
+            if *index < rhs.len() {
+                rhs0 = Some(rhs[*index].clone());
+                let mut k = *index + 1;
+                let symbols_rhs0 = symbols.get_mut(&rhs0).unwrap();
+                while k < rhs.len() {
+                    let tmp_op = first.get(&Some(rhs[k].clone()));
+                    if let Some(tmp) = tmp_op {
+                        for tmp2 in tmp {
+                            symbols_rhs0.insert(tmp2.clone());
+                        }
+                        if !empty.contains(&Some(rhs[k].clone())) {
+                            break;
+                        }
+                    }
+                    k += 1;
+                }
+                if k == rhs.len() {
+                    if seed_set.contains(&(*rule, *index)) {
+                        seeds.get_mut(&rhs0).unwrap().insert((*rule, *index));
+                    } else {
+                        routes.insert((lhs.clone(), rhs0.clone()));
+                    }
+                }
+            }
+        }
+        let mut rep = true;
+        while rep {
+            rep = false;
+            for (lhs, sym) in &routes {
+                let mut n = symbols.get(lhs).map(|x| x.len()).unwrap_or(0);
+                {
+                    let to_add = symbols.get(&rhs0).unwrap().clone();
+                    let target = symbols.get_mut(&lhs).unwrap();
+                    for tmp in to_add {
+                        target.insert(tmp);
+                    }
+                }
+                rep |= n < symbols.get(lhs).map(|x| x.len()).unwrap_or(0);
+                n = seeds.get(lhs).map(|x| x.len()).unwrap_or(0);
+                {
+                    let to_add = seeds.get(&rhs0).unwrap().clone();
+                    let target = seeds.get_mut(&lhs).unwrap();
+                    for tmp in to_add {
+                        target.insert(tmp);
+                    }
+                }
+                rep |= n < seeds.get(lhs).map(|x| x.len()).unwrap_or(0);
+            }
+        }
+        return (symbols, seeds);
+    }
 }
 
 pub struct GrammarRefPrefixAndItemRef<'a,S> {
