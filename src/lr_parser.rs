@@ -144,6 +144,27 @@ impl<S> LrParser<S> {
         println!("{:?}", shifts);
         println!("{:?}", reductions);
     }
+
+    pub fn empty_symbols(&self) -> HashSet<Option<S>> where S: Clone + PartialEq + Eq + Hash {
+        let mut symbols: HashSet<Option<S>> = HashSet::new();
+        for rule in &self.grammar.0 {
+            if rule.parts.is_empty() {
+                symbols.insert(rule.name_op.clone());
+            }
+        }
+        let mut m: usize = 0;
+        let mut n = symbols.len();
+        while m < n {
+            for rule in &self.grammar.0 {
+                if rule.parts.iter().all(|part| symbols.contains(&Some(part.clone()))) {
+                    symbols.insert(rule.name_op.clone());
+                }
+            }
+            m = n;
+            n = symbols.len();
+        }
+        symbols
+    }
 }
 
 pub struct GrammarRefPrefixAndItemRef<'a,S> {
