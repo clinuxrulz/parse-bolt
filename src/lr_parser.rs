@@ -93,7 +93,7 @@ impl<S> LrParser<S> {
         result
     }
 
-    pub fn compute_all_itemsets(&self) where S: Clone + std::fmt::Debug + PartialEq + Eq + Hash + std::fmt::Display {
+    pub fn compute_all_itemsets(&self) -> (Vec<ItemSet>,Vec<ItemSet>) where S: Clone + std::fmt::Debug + PartialEq + Eq + Hash + std::fmt::Display {
         let mut item_sets: Vec<ItemSet> = Vec::new();
         item_sets.push(ItemSet { items: vec![Item { rule: 0, index: 0, }] });
         let mut item_sets_index: HashMap<ItemSet,usize> = HashMap::new();
@@ -109,7 +109,8 @@ impl<S> LrParser<S> {
         let mut shifts: Vec<HashMap<S,usize>> = Vec::new();
         let mut reductions: Vec<ItemSet> = Vec::new();
         let mut k: usize = 0;
-        while let Some(item_set) = if item_sets.is_empty() { None } else { Some(item_sets.remove(0)) } {
+        while k < item_sets.len() {
+            let item_set = &item_sets[k];
             vectors.push(item_set.items.iter().map(|i| i.rule).collect());
             let pset = self.predict(item_set.items.clone());
             full_item_sets.push(pset.clone());
@@ -143,6 +144,7 @@ impl<S> LrParser<S> {
         }
         println!("{:?}", shifts);
         println!("{:?}", reductions);
+        return (item_sets, full_item_sets);
     }
 
     pub fn empty_symbols(&self) -> HashSet<Option<S>> where S: Clone + PartialEq + Eq + Hash {
@@ -251,7 +253,7 @@ impl<S> LrParser<S> {
         let mut rep = true;
         while rep {
             rep = false;
-            for (lhs, sym) in &routes {
+            for (lhs, _sym) in &routes {
                 let mut n = symbols.get(lhs).map(|x| x.len()).unwrap_or(0);
                 {
                     let to_add = symbols.get(&rhs0).unwrap().clone();
@@ -397,8 +399,19 @@ fn test_lr_parser() {
         });
     }
     println!("---");
-    lr_parser.compute_all_itemsets();
+    let (item_sets, full_item_sets) = lr_parser.compute_all_itemsets();
     println!("---");
     let first = lr_parser.first_lexemes();
     println!("{:?}", first);
+    println!("---");
+    let mut follow_sym = Vec::new();
+    let mut follow_seeds = Vec::new();
+    for i in 0..item_sets.len() {
+        let (syms, seeds) = lr_parser.follow_lexemes(&item_sets[i].items.iter().map(|x| (x.rule, x.index)).collect(), &full_item_sets[i]);
+        println!("{}", i);
+        println!("{:?}", syms);
+        println!("{:?}", seeds);
+        follow_sym.push(syms);
+        follow_seeds.push(seeds);
+    }
 }
