@@ -46,10 +46,13 @@ impl<Err, T, A> Parser<Err, T, A> {
         let str: String = str[index..index + len].iter().collect();
         let tokens: Vec<T> = str.chars().map(Into::into).collect();
         let mut token_stream = TokenStream::from_vec(tokens);
-        self.arrow.run(&mut token_stream).map(|a| {
-            let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
-            (*a, token_stream.save().offset)
-        }).map_err(|(_,err)| err)
+        self.arrow
+            .run(&mut token_stream)
+            .map(|a| {
+                let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
+                (*a, token_stream.save().offset)
+            })
+            .map_err(|(_, err)| err)
     }
 
     pub fn run_str(&self, str: &str) -> Result<A, Err>
@@ -60,10 +63,13 @@ impl<Err, T, A> Parser<Err, T, A> {
     {
         let tokens: Vec<T> = str.chars().map(Into::into).collect();
         let mut token_stream = TokenStream::from_vec(tokens);
-        self.arrow.run(&mut token_stream).map(|a| {
-            let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
-            *a
-        }).map_err(|(_,err)| err)
+        self.arrow
+            .run(&mut token_stream)
+            .map(|a| {
+                let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
+                *a
+            })
+            .map_err(|(_, err)| err)
     }
 
     #[inline(always)]
@@ -73,10 +79,13 @@ impl<Err, T, A> Parser<Err, T, A> {
         T: Clone + 'static,
         A: 'static,
     {
-        self.arrow.run(tokens).map(|a| {
-            let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
-            *a
-        }).map_err(|(_,err)| err)
+        self.arrow
+            .run(tokens)
+            .map(|a| {
+                let a: Box<A> = a.into_box_any().downcast().ok().unwrap();
+                *a
+            })
+            .map_err(|(_, err)| err)
     }
 
     #[inline(always)]
@@ -249,10 +258,11 @@ impl<Err, T, A> Parser<Err, T, A> {
         T: std::fmt::Display + 'static,
         A: Clone + 'static,
     {
-        self.seq2(&self.zero_or_more_vec_unordered_choice()).map(|(x, mut xs)| {
-            xs.insert(0, x);
-            xs
-        })
+        self.seq2(&self.zero_or_more_vec_unordered_choice())
+            .map(|(x, mut xs)| {
+                xs.insert(0, x);
+                xs
+            })
     }
 
     #[inline(always)]
@@ -281,8 +291,10 @@ impl<Err, T, A> Parser<Err, T, A> {
     {
         let self2 = self.clone();
         Parser::unordered_choice(vec![
-            self.seq2(&Parser::lazy(move || self2._zero_or_more_vec_unordered_choice()))
-                .map(move |(x, xs)| Rc::new(LinkList::Cons(x, Rc::clone(&xs)))),
+            self.seq2(&Parser::lazy(move || {
+                self2._zero_or_more_vec_unordered_choice()
+            }))
+            .map(move |(x, xs)| Rc::new(LinkList::Cons(x, Rc::clone(&xs)))),
             Parser::empty().map(move |_| Rc::new(LinkList::Empty)),
         ])
     }
@@ -456,10 +468,11 @@ impl CloneableAny for CloneableAnyTuple {
 
 impl<T> ParserArrow<T> {
     fn optimise(&self) {
-        let new_composition = VecBuilder::PushMany(Rc::new(rc_vec_builder_into_vec(&self.composition)));
+        let new_composition =
+            VecBuilder::PushMany(Rc::new(rc_vec_builder_into_vec(&self.composition)));
         *self.composition.borrow_mut() = new_composition;
     }
-    
+
     fn run<Err: Clone>(
         &self,
         tokens: &mut TokenStream<T>,
@@ -485,7 +498,7 @@ impl<T> ParserArrow<T> {
             MakeStringFromPosIntoVal(fn(&T) -> char, Pos),
             FilterVal(Rc<RefCell<dyn FnMut(&Box<dyn CloneableAny>) -> bool>>),
             InjectFirstHalfOfTuple(BoxedCloneable),
-            IfErrorTryOtherArrows(Pos,BoxedCloneable,Vec<Rc<ParserArrow<T>>>),
+            IfErrorTryOtherArrows(Pos, BoxedCloneable, Vec<Rc<ParserArrow<T>>>),
         }
         let mut run_arrow_stack: Vec<(
             Pos,
@@ -494,7 +507,7 @@ impl<T> ParserArrow<T> {
             Rc<Vec<Instruction<T>>>,
         )> = Vec::new();
         let mut instruction_stack = Vec::new();
-        let mut furthest_error_op: Option<(Pos,Err)> = None;
+        let mut furthest_error_op: Option<(Pos, Err)> = None;
         fn assign_error_if_further<Err>(
             last_error_op: Option<(Pos, Err)>,
             pos: Pos,
@@ -522,7 +535,7 @@ impl<T> ParserArrow<T> {
             Rc::new(self.clone()),
             Rc::new(Vec::new()),
         ));
-        let mut result: Result<Box<dyn CloneableAny>,Err> = Ok(Box::new(()));
+        let mut result: Result<Box<dyn CloneableAny>, Err> = Ok(Box::new(()));
         'arrow_loop: while let Some((pos, start_val, arrow, init_instruction_stack)) =
             run_arrow_stack.pop()
         {
@@ -617,7 +630,11 @@ impl<T> ParserArrow<T> {
                                     arrows.reverse();
                                     let arrow = arrows.pop().unwrap();
                                     if arrows.len() != 0 {
-                                        instruction_stack.push(Instruction::IfErrorTryOtherArrows(tokens.save(), BoxedCloneable { x: val.clone_any() }, arrows));
+                                        instruction_stack.push(Instruction::IfErrorTryOtherArrows(
+                                            tokens.save(),
+                                            BoxedCloneable { x: val.clone_any() },
+                                            arrows,
+                                        ));
                                     }
                                     instruction_stack.push(Instruction::RunArrow(arrow))
                                 }
@@ -695,7 +712,8 @@ impl<T> ParserArrow<T> {
                             tokens.restore(pos);
                             let arrow = arrows.pop().unwrap();
                             if arrows.len() != 0 {
-                                instruction_stack.push(Instruction::IfErrorTryOtherArrows(pos, val, arrows));
+                                instruction_stack
+                                    .push(Instruction::IfErrorTryOtherArrows(pos, val, arrows));
                             }
                             instruction_stack.push(Instruction::RunArrow(arrow))
                         }
@@ -703,7 +721,8 @@ impl<T> ParserArrow<T> {
                 }
             }
             if let Err(error) = &result {
-                furthest_error_op = assign_error_if_further(furthest_error_op, tokens.save(), (*error).clone());
+                furthest_error_op =
+                    assign_error_if_further(furthest_error_op, tokens.save(), (*error).clone());
             }
             if instruction_stack.is_empty() && result.is_ok() {
                 break;

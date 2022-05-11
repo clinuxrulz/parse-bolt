@@ -760,11 +760,13 @@ pub fn dec_digit_no_zero() -> Parser<String, char, char> {
 }
 
 pub fn dec_digits() -> Parser<String, char, String> {
-    dec_digit().one_or_more_vec()
+    dec_digit()
+        .one_or_more_vec()
         .seq2(
-            &Parser::match_('_').optional()
+            &Parser::match_('_')
+                .optional()
                 .seq2(&dec_digit().one_or_more_vec())
-                .zero_or_more_vec()
+                .zero_or_more_vec(),
         )
         .map_to(())
         .return_string()
@@ -804,9 +806,10 @@ pub fn integer_literal() -> Parser<String, char, String> {
     dec_digit_no_zero()
         .seq2(&dec_digit().zero_or_more_vec())
         .seq2(
-            &Parser::match_('_').optional()
+            &Parser::match_('_')
+                .optional()
                 .seq2(&dec_digit().one_or_more_vec())
-                .zero_or_more_vec()
+                .zero_or_more_vec(),
         )
         .map_to(())
         .return_string()

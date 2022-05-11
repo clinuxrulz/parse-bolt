@@ -1,4 +1,4 @@
-#[derive(Clone,Copy,Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Pos {
     pub offset: usize,
     pub line: usize,
@@ -8,7 +8,7 @@ pub struct Pos {
 pub struct TokenStream<T> {
     tokens: Vec<T>,
     pos: Pos,
-    t_to_char_op: Option<fn(&T)->char>,
+    t_to_char_op: Option<fn(&T) -> char>,
 }
 
 impl<T> TokenStream<T> {
@@ -22,7 +22,9 @@ impl<T> TokenStream<T> {
         let t = self.tokens[self.pos.offset].clone();
         if let Some(t_to_char) = self.t_to_char_op {
             let t = t_to_char(&t);
-            if t == '\n' || (self.pos.offset > 0) && t_to_char(&self.tokens[self.pos.offset - 1]) == '\r' {
+            if t == '\n'
+                || (self.pos.offset > 0) && t_to_char(&self.tokens[self.pos.offset - 1]) == '\r'
+            {
                 self.pos.line += 1;
                 self.pos.col = 1;
             } else {
