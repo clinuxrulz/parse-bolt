@@ -195,7 +195,7 @@ impl<S> LrParser<S> {
             vectors.push(item_set.items.iter().map(|i| i.rule).collect());
             let pset = self.predict(item_set.items.clone());
             full_item_sets.push(pset.clone());
-            print!("{}", GrammarRefIndexAndItemSetRef {
+            print!("{}", GrammarRefPrefixAndItemSetRef {
                 grammar_ref: &self.grammar,
                 prefix: format!("{}", k),
                 item_set: &pset
@@ -386,7 +386,7 @@ pub struct GrammarRefPrefixAndItemRef<'a,S> {
     item: &'a Item,
 }
 
-pub struct GrammarRefIndexAndItemSetRef<'a,S> {
+pub struct GrammarRefPrefixAndItemSetRef<'a,S> {
     grammar_ref: &'a Grammar<S>,
     prefix: String,
     item_set: &'a ItemSet,
@@ -444,7 +444,7 @@ impl<'a, S: std::fmt::Display> std::fmt::Display for GrammarRefPrefixAndItemRef<
     }
 }
 
-impl<'a, S: std::fmt::Display> std::fmt::Display for GrammarRefIndexAndItemSetRef<'a, S> {
+impl<'a, S: std::fmt::Display> std::fmt::Display for GrammarRefPrefixAndItemSetRef<'a, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let first_prefix = format!("{}: ", self.prefix);
         let other_prefixes: String = (0..first_prefix.len()).map(|_| ' ').collect();
@@ -486,7 +486,7 @@ fn test_lr_parser() {
     };
     let prediction = lr_parser.predict(vec![Item { rule: 0, index: 0 }]);
     println!("---");
-    println!("{}", GrammarRefIndexAndItemSetRef {
+    println!("{}", GrammarRefPrefixAndItemSetRef {
         grammar_ref: &lr_parser.grammar,
         prefix: "0: ".to_owned(),
         item_set: &prediction,
@@ -495,7 +495,7 @@ fn test_lr_parser() {
     let partition = lr_parser.partition(&prediction);
     println!("parition:");
     for (sym_op, item_set) in partition {
-        print!("{}", GrammarRefIndexAndItemSetRef {
+        print!("{}", GrammarRefPrefixAndItemSetRef {
             grammar_ref: &lr_parser.grammar,
             prefix: sym_op.unwrap_or("None").to_owned(),
             item_set: &item_set,
@@ -506,23 +506,23 @@ fn test_lr_parser() {
     println!("---");
     println!("create state 0 item set:");
     let state0_item_set = lr_parser.create_state_0_item_set();
-    print!("{}", GrammarRefIndexAndItemSetRef {
+    print!("{}", GrammarRefPrefixAndItemSetRef {
         grammar_ref: &lr_parser.grammar,
         prefix: "0".to_owned(),
         item_set: &state0_item_set,
     });
     println!("---");
-    println!("{:?}",
-        lr_parser.follow(
-            &ItemSet {
-                items: vec![
-                    Item { rule: 0, index: 0, },
-                    Item { rule: 1, index: 0, },
-                    Item { rule: 2, index: 0, },
-                ]
-            },
-            "program",
-        ),
+    println!("following \"program\" from state 0 item set to make next item set state.");
+    let state1_item_set = lr_parser.follow(
+        &state0_item_set,
+        "program",
+    );
+    print!("{}",
+        GrammarRefPrefixAndItemSetRef {
+            grammar_ref: &lr_parser.grammar,
+            prefix: "1".to_owned(),
+            item_set: &state1_item_set,
+        }
     );
     println!("---");
     let first = lr_parser.first_lexemes();
