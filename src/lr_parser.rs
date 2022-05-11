@@ -119,7 +119,14 @@ impl<S> LrParser<S> {
         return ItemSet { items: items, }
     }
 
-    //pub fn create_states()
+    pub fn edges(&self, item_set: &ItemSet) -> HashSet<Option<S>> where S: Clone + PartialEq + Eq + Hash {
+        let mut result: HashSet<Option<S>> = HashSet::new();
+        for item in &item_set.items {
+            let rule = &self.grammar.0[item.rule];
+            result.insert(rule.parts.get(item.index).map(S::clone));
+        }
+        return result;
+    }
 
     pub fn predict(&self, mut items: Vec<Item>) -> ItemSet where S: Clone + PartialEq {
         let mut prediction: HashSet<Item> = HashSet::new();
