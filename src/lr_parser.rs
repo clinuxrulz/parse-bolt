@@ -56,7 +56,9 @@ impl<S> LrParser<S> {
             let rule = &self.grammar.0[item.rule];
             if item.index < rule.parts.len() {
                 if sym == rule.parts[item.index] {
-                    stack.push(Item { rule: item.rule, index: item.index + 1, });
+                    let next_item = Item { rule: item.rule, index: item.index + 1, };
+                    result.insert(next_item);
+                    stack.push(next_item);
                 }
             }
         }
