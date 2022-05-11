@@ -17,7 +17,7 @@ pub struct Rule<S> {
     parts: Vec<S>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Item {
     rule: usize,
     index: usize,
@@ -33,6 +33,34 @@ impl<S> LrParser<S> {
         let rule = &self.grammar.0[item.rule];
         rule.parts.get(item.index).map(S::clone)
     }
+
+    pub fn first(&self, sym_op: Option<S>) -> HashSet<S> where S: Clone + PartialEq + Eq + Hash {
+        let mut result: HashSet<S> = HashSet::new();
+        for rule in &self.grammar.0 {
+            if rule.name_op == sym_op {
+                if !rule.parts.is_empty() {
+                    let part0 = &rule.parts[0];
+                    if self.lexemes.0.contains(part0) {
+                        result.insert(part0.clone());
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    /*
+    pub fn follow(&self, item_set: &ItemSet, sym: Option<S>) -> ItemSet where S: PartialEq + Eq + Hash {
+        let mut result: HashSet<Item> = HashSet::new();
+        for item in &item_set.items {
+
+        }
+        let mut items = result.drain().collect::<Vec<Item>>();
+        items.sort();
+        return ItemSet {
+            items,
+        };
+    }*/
 
     pub fn predict(&self, mut items: Vec<Item>) -> ItemSet where S: Clone + PartialEq {
         let mut prediction: HashSet<Item> = HashSet::new();
