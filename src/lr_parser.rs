@@ -3,7 +3,7 @@ use std::hash::Hash;
 
 // https://boxbase.org/entries/2019/oct/14/lr1-parsing-tables/
 
-pub struct LrParser<S> {
+pub struct LrParserTableGenerator<S> {
     grammar: Grammar<S>,
     lexemes: Lexemes<S>,
 }
@@ -28,7 +28,21 @@ pub struct ItemSet {
     items: Vec<Item>,
 }
 
-impl<S> LrParser<S> {
+pub enum ShiftOrReduce {
+    Shift(usize),
+    Reduce(usize),
+}
+
+pub struct LrParserTableState<S> {
+    actions: HashMap<S,ShiftOrReduce>,
+    gotos: HashMap<S,usize>,
+}
+
+pub struct LrParserTable<S> {
+    states: Vec<LrParserTableState<S>>,
+}
+
+impl<S> LrParserTableGenerator<S> {
     pub fn after_dot(&self, item: &Item) -> Option<S> where S: Clone {
         let rule = &self.grammar.0[item.rule];
         rule.parts.get(item.index).map(S::clone)
@@ -489,7 +503,7 @@ fn test_lr_parser() {
         "constDecl",
         "statement",
     ]);
-    let lr_parser = LrParser {
+    let lr_parser = LrParserTableGenerator {
         grammar,
         lexemes,
     };
