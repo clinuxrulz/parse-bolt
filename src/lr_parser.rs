@@ -28,20 +28,19 @@ pub struct ItemSet {
     items: Vec<Item>,
 }
 
-pub enum ShiftOrReduce {
-    Shift(usize),
-    Reduce(usize),
-}
-
+#[derive(Debug)]
 pub struct LrParserTableState<S> {
-    actions: HashMap<S,ShiftOrReduce>,
+    shifts: HashMap<S,usize>,
     gotos: HashMap<S,usize>,
+    reduce_op: Option<usize>,
 }
 
+#[derive(Debug)]
 pub struct LrParserTable<S> {
     states: Vec<LrParserTableState<S>>,
 }
 
+#[derive(Debug)]
 pub struct LrParser<S> {
     table: LrParserTable<S>,
     state: usize,
@@ -149,18 +148,69 @@ impl<S> LrParserTableGenerator<S> {
         return result;
     }
 
-    pub fn generate_table(&self) -> LrParserTable<S> where S: Clone + PartialEq {
+    pub fn generate_table(&self) -> LrParserTable<S> where S: Clone + PartialEq + Eq + Hash {
         let mut stack: Vec<ItemSet> = Vec::new();
-        let mut states = Vec::new();
+        let mut states: HashMap<usize,Option<LrParserTableState<S>>> = HashMap::new();
         let mut state_index_map: HashMap<ItemSet,usize> = HashMap::new();
         {
             let state_0 = self.create_state_0_item_set();
             stack.push(state_0);
         }
         while let Some(item_set) = stack.pop() {
-            todo!();
+            let state_index;
+            if let Some(state_index_2) = state_index_map.get(&item_set) {
+                state_index = *state_index_2;
+            } else {
+                state_index = state_index_map.len();
+                state_index_map.insert(item_set.clone(), state_index);
+            }
+            if states.contains_key(&state_index) {
+                continue;
+            }
+            let edges = self.edges(&item_set);
+            let mut shifts: HashMap<S,usize> = HashMap::new();
+            let mut gotos: HashMap<S,usize> = HashMap::new();
+            let mut reduce_op: Option<usize> = None;
+            for sym_op in edges {
+                if let Some(sym) = sym_op {
+                    let next_item_set = self.follow(&item_set, sym.clone());
+                    let next_state_index;
+                    if let Some(next_state_index2) = state_index_map.get(&next_item_set) {
+                        next_state_index = *next_state_index2;
+                    } else {
+                        next_state_index = state_index_map.len();
+                        state_index_map.insert(next_item_set.clone(), next_state_index);
+                    }
+                    if self.lexemes.0.contains(&sym) {
+                        shifts.insert(sym, next_state_index);
+                    } else {
+                        gotos.insert(sym, next_state_index);
+                    }
+                    stack.push(next_item_set);
+                } else {
+                    for item in &item_set.items {
+                        let rule = &self.grammar.0[item.rule];
+                        if item.index == rule.parts.len() {
+                            reduce_op = Some(item.rule);
+                            break;
+                        }
+                    }
+                }
+            }
+            let lr_parse_table_state = LrParserTableState {
+                shifts,
+                gotos,
+                reduce_op
+            };
+            states.insert(state_index, Some(lr_parse_table_state));
         }
-        LrParserTable { states, }
+        let mut states2 = Vec::new();
+        for i in 0..states.len() {
+            let mut tmp = None;
+            std::mem::swap(&mut tmp, &mut states.get_mut(&i).unwrap());
+            states2.push(tmp.unwrap());
+        }
+        LrParserTable { states: states2, }
     }
 
     pub fn predict(&self, mut items: Vec<Item>) -> ItemSet where S: Clone + PartialEq {
@@ -568,6 +618,10 @@ fn test_lr_parser() {
             item_set: &state1_item_set,
         }
     );
+    println!("---");
+    println!("generate lr parse table:");
+    let lr_parser_table = lr_parser.generate_table();
+    println!("{:?}", lr_parser_table);
     println!("---");
     let first = lr_parser.first_lexemes();
     println!("{:?}", first);
