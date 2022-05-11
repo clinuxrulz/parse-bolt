@@ -42,6 +42,13 @@ pub struct LrParserTable<S> {
     states: Vec<LrParserTableState<S>>,
 }
 
+pub struct LrParser<S> {
+    table: LrParserTable<S>,
+    state: usize,
+    stack: Vec<S>,
+    output: Vec<usize>,
+}
+
 impl<S> LrParserTableGenerator<S> {
     pub fn after_dot(&self, item: &Item) -> Option<S> where S: Clone {
         let rule = &self.grammar.0[item.rule];
