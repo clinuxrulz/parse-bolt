@@ -93,6 +93,32 @@ impl<S> LrParser<S> {
         };
     }
 
+    pub fn create_state_0_item_set(&self) -> ItemSet where S: Clone + PartialEq {
+        let mut result: HashSet<Item> = HashSet::new();
+        let mut stack: Vec<Option<S>> = Vec::new();
+        stack.push(None);
+        while let Some(sym_op) = stack.pop() {
+            let mut rule_index: usize = 0;
+            for rule in &self.grammar.0 {
+                if rule.name_op == sym_op {
+                    let changed = result.insert(Item { rule: rule_index, index: 0 });
+                    if changed && !rule.parts.is_empty() {
+                        let part0 = &rule.parts[0];
+                        if !self.lexemes.0.contains(part0) {
+                            stack.push(Some(part0.clone()));
+                        }
+                    }
+                }
+                rule_index += 1;
+            }
+        }
+        let mut items: Vec<Item> = result.drain().collect();
+        items.sort();
+        return ItemSet { items: items, }
+    }
+
+    //pub fn create_states()
+
     pub fn predict(&self, mut items: Vec<Item>) -> ItemSet where S: Clone + PartialEq {
         let mut prediction: HashSet<Item> = HashSet::new();
         for item in &items {
@@ -477,6 +503,14 @@ fn test_lr_parser() {
     }
     println!("---");
     let (item_sets, full_item_sets, vectors) = lr_parser.compute_all_itemsets();
+    println!("---");
+    println!("create state 0 item set:");
+    let state0_item_set = lr_parser.create_state_0_item_set();
+    print!("{}", GrammarRefIndexAndItemSetRef {
+        grammar_ref: &lr_parser.grammar,
+        prefix: "0".to_owned(),
+        item_set: &state0_item_set,
+    });
     println!("---");
     println!("{:?}",
         lr_parser.follow(
