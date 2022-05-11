@@ -729,7 +729,7 @@ fn test_lr_parser() {
     println!("---");
     println!("generate lr parse table:");
     let lr_parser_table = lr_parser.generate_table();
-    println!("{:?}", lr_parser_table);
+    println!("{:#?}", lr_parser_table);
     println!("---");
     let first = lr_parser.first_lexemes();
     println!("{:?}", first);
