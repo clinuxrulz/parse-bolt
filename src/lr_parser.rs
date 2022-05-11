@@ -149,6 +149,20 @@ impl<S> LrParserTableGenerator<S> {
         return result;
     }
 
+    pub fn generate_table(&self) -> LrParserTable<S> where S: Clone + PartialEq {
+        let mut stack: Vec<ItemSet> = Vec::new();
+        let mut states = Vec::new();
+        let mut state_index_map: HashMap<ItemSet,usize> = HashMap::new();
+        {
+            let state_0 = self.create_state_0_item_set();
+            stack.push(state_0);
+        }
+        while let Some(item_set) = stack.pop() {
+            todo!();
+        }
+        LrParserTable { states, }
+    }
+
     pub fn predict(&self, mut items: Vec<Item>) -> ItemSet where S: Clone + PartialEq {
         let mut prediction: HashSet<Item> = HashSet::new();
         for item in &items {
