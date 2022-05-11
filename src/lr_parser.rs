@@ -49,18 +49,49 @@ impl<S> LrParser<S> {
         return result;
     }
 
-    /*
-    pub fn follow(&self, item_set: &ItemSet, sym: Option<S>) -> ItemSet where S: PartialEq + Eq + Hash {
+    pub fn follow(&self, item_set: &ItemSet, sym: S) -> ItemSet where S: PartialEq + Eq + Hash {
         let mut result: HashSet<Item> = HashSet::new();
+        let mut stack: Vec<Item> = Vec::new();
         for item in &item_set.items {
-
+            let rule = &self.grammar.0[item.rule];
+            if item.index < rule.parts.len() {
+                if sym == rule.parts[item.index] {
+                    stack.push(Item { rule: item.rule, index: item.index + 1, });
+                }
+            }
+        }
+        let mut visited: HashSet<Item> = HashSet::new();
+        while let Some(item) = stack.pop() {
+            let rule = &self.grammar.0[item.rule];
+            if visited.contains(&item) {
+                continue;
+            }
+            visited.insert(item);
+            if item.index < rule.parts.len() {
+                let part0 = &rule.parts[item.index];
+                if self.lexemes.0.contains(part0) {
+                    result.insert(item);
+                } else {
+                    let mut rule_index: usize = 0;
+                    for rule in &self.grammar.0 {
+                        if let Some(rule_name) = rule.name_op.as_ref() {
+                            if *rule_name == *part0 {
+                                stack.push(Item { rule: rule_index, index: 0, })
+                            }
+                        }
+                        rule_index += 1;
+                    }
+                }
+            } else {
+                result.insert(item);
+            }
         }
         let mut items = result.drain().collect::<Vec<Item>>();
         items.sort();
         return ItemSet {
             items,
         };
-    }*/
+    }
 
     pub fn predict(&self, mut items: Vec<Item>) -> ItemSet where S: Clone + PartialEq {
         let mut prediction: HashSet<Item> = HashSet::new();
@@ -428,6 +459,7 @@ fn test_lr_parser() {
         lexemes,
     };
     let prediction = lr_parser.predict(vec![Item { rule: 0, index: 0 }]);
+    println!("---");
     println!("{}", GrammarRefIndexAndItemSetRef {
         grammar_ref: &lr_parser.grammar,
         prefix: "0: ".to_owned(),
@@ -445,6 +477,19 @@ fn test_lr_parser() {
     }
     println!("---");
     let (item_sets, full_item_sets, vectors) = lr_parser.compute_all_itemsets();
+    println!("---");
+    println!("{:?}",
+        lr_parser.follow(
+            &ItemSet {
+                items: vec![
+                    Item { rule: 0, index: 0, },
+                    Item { rule: 1, index: 0, },
+                    Item { rule: 2, index: 0, },
+                ]
+            },
+            "program",
+        ),
+    );
     println!("---");
     let first = lr_parser.first_lexemes();
     println!("{:?}", first);
