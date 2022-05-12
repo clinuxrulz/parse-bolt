@@ -50,7 +50,7 @@ pub struct LrParser<S> {
     table: LrParserTable<S>,
     state: usize,
     stack: Vec<usize>,
-    output: Vec<AstNode<S>>,
+    forest: Vec<AstNode<S>>,
 }
 
 impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
@@ -225,7 +225,7 @@ impl<S> LrParser<S> {
             table,
             state: 0,
             stack: Vec::new(),
-            output: Vec::new(),
+            forest: Vec::new(),
         }
     }
 
@@ -239,17 +239,17 @@ impl<S> LrParser<S> {
             let shift = shift_op.unwrap();
             self.stack.push(self.state);
             self.state = *shift;
-            self.output.push(AstNode { value: Some(sym), children: Vec::new(), });
+            self.forest.push(AstNode { value: Some(sym), children: Vec::new(), });
         } else {
             // handle eof
             if let Some((consume, rule_name_op)) = &state.reduce_op {
                 let mut leaves: Vec<AstNode<S>> = Vec::new();
                 for _i in 0..*consume {
                     self.stack.pop();
-                    leaves.push(self.output.pop().unwrap());
+                    leaves.push(self.forest.pop().unwrap());
                 }
                 leaves.reverse();
-                self.output.push(
+                self.forest.push(
                     AstNode {
                         value: Option::<S>::clone(rule_name_op),
                         children: leaves,
@@ -410,5 +410,19 @@ fn test_lr_parser() {
     let lr_parser_table = lr_parser_tg.generate_table();
     println!("{:#?}", lr_parser_table);
     println!("---");
-    let lr_parser = LrParser::new(lr_parser_table);
+    println!("testing lr parser:");
+    let mut lr_parser = LrParser::new(lr_parser_table);
+    println!("{:?}", lr_parser);
+    println!("__advance statement");
+    let _ = lr_parser.advance(Some("statement"));
+    println!("{:?}", lr_parser);
+    println!("__advance varDecl");
+    let _ = lr_parser.advance(Some("varDecl"));
+    println!("{:?}", lr_parser);
+    println!("__advance eof");
+    let _ = lr_parser.advance(None);
+    println!("{:?}", lr_parser);
+    println!("");
+    println!("result:");
+    println!("{:?}", lr_parser.forest);
 }
