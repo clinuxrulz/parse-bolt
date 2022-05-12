@@ -231,6 +231,27 @@ impl<S> LrParser<S> {
 
     pub fn advance(&mut self, sym_op: Option<S>) -> Result<bool,String> where S: Clone + PartialEq + Eq + Hash {
         let state = &self.table.states[self.state];
+        //
+        if let Some((consume, rule_name_op)) = &state.reduce_op {
+            let mut leaves: Vec<AstNode<S>> = Vec::new();
+            for _i in 0..*consume {
+                self.stack.pop();
+                leaves.push(self.forest.pop().unwrap());
+            }
+            leaves.reverse();
+            self.forest.push(
+                AstNode {
+                    value: Option::<S>::clone(rule_name_op),
+                    children: leaves,
+                }
+            );
+            // hack
+            self.state = *state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap();
+            //
+        }
+        //
+        let state = &self.table.states[self.state];
+        //
         if let Some(sym) = sym_op {
             let shift_op = state.shifts.get(&sym);
             if shift_op.is_none() {
@@ -240,6 +261,7 @@ impl<S> LrParser<S> {
             self.stack.push(self.state);
             self.state = *shift;
             self.forest.push(AstNode { value: Some(sym), children: Vec::new(), });
+            return Ok(false);
         } else {
             // handle eof
             if let Some((consume, rule_name_op)) = &state.reduce_op {
@@ -260,7 +282,6 @@ impl<S> LrParser<S> {
                 return Err("syntax error".to_owned());
             }
         }
-        Err("unreachable".to_owned())
     }
 }
 
