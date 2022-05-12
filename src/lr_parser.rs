@@ -32,7 +32,7 @@ pub struct ItemSet {
 pub struct LrParserTableState<S> {
     shifts: HashMap<S, usize>,
     gotos: HashMap<S, usize>,
-    reduce_op: Option<usize>,
+    reduce_op: Option<(usize, Option<S>)>,
 }
 
 #[derive(Debug)]
@@ -194,9 +194,15 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
                 continue;
             }
             let edges = self.edges(&item_set);
+            let mut reduce_op: Option<(usize, Option<S>)> = None;
+            for item in &item_set.items {
+                let rule = &self.grammar.0[item.rule];
+                if item.index == rule.parts.len() {
+                    reduce_op = Some((rule.parts.len(), rule.name_op.clone()));
+                }
+            }
             let mut shifts: HashMap<S, usize> = HashMap::new();
             let mut gotos: HashMap<S, usize> = HashMap::new();
-            let mut reduce_op: Option<usize> = None;
             for sym_op in edges {
                 if let Some(sym) = sym_op {
                     let next_item_set = self.follow(&item_set, sym.clone());
@@ -213,14 +219,6 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
                         gotos.insert(sym, next_state_index);
                     }
                     stack.push(next_item_set);
-                } else {
-                    for item in &item_set.items {
-                        let rule = &self.grammar.0[item.rule];
-                        if item.index == rule.parts.len() {
-                            reduce_op = Some(item.rule);
-                            break;
-                        }
-                    }
                 }
             }
             let lr_parse_table_state = LrParserTableState {
