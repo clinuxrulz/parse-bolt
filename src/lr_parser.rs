@@ -40,11 +40,17 @@ pub struct LrParserTable<S> {
 }
 
 #[derive(Debug)]
+pub struct AstNode<S> {
+    value: Option<S>,
+    children: Vec<AstNode<S>>,
+}
+
+#[derive(Debug)]
 pub struct LrParser<S> {
     table: LrParserTable<S>,
     state: usize,
-    stack: Vec<S>,
-    output: Vec<usize>,
+    stack: Vec<usize>,
+    output: Vec<AstNode<S>>,
 }
 
 impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
@@ -213,6 +219,51 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
     }
 }
 
+impl<S> LrParser<S> {
+    pub fn new(table: LrParserTable<S>) -> LrParser<S> {
+        LrParser {
+            table,
+            state: 0,
+            stack: Vec::new(),
+            output: Vec::new(),
+        }
+    }
+
+    pub fn advance(&mut self, sym_op: Option<S>) -> Result<bool,String> where S: Clone + PartialEq + Eq + Hash {
+        let state = &self.table.states[self.state];
+        if let Some(sym) = sym_op {
+            let shift_op = state.shifts.get(&sym);
+            if shift_op.is_none() {
+                return Err("syntax error".to_owned());
+            }
+            let shift = shift_op.unwrap();
+            self.stack.push(self.state);
+            self.state = *shift;
+            self.output.push(AstNode { value: Some(sym), children: Vec::new(), });
+        } else {
+            // handle eof
+            if let Some((consume, rule_name_op)) = &state.reduce_op {
+                let mut leaves: Vec<AstNode<S>> = Vec::new();
+                for _i in 0..*consume {
+                    self.stack.pop();
+                    leaves.push(self.output.pop().unwrap());
+                }
+                leaves.reverse();
+                self.output.push(
+                    AstNode {
+                        value: Option::<S>::clone(rule_name_op),
+                        children: leaves,
+                    }
+                );
+                return Ok(rule_name_op.is_none());
+            } else {
+                return Err("syntax error".to_owned());
+            }
+        }
+        Err("unreachable".to_owned())
+    }
+}
+
 pub struct GrammarRefPrefixAndItemRef<'a, S> {
     grammar_ref: &'a Grammar<S>,
     prefix: &'a String,
@@ -331,32 +382,33 @@ fn test_lr_parser() {
         },
     ]);
     let lexemes = Lexemes(vec!["varDecl", "constDecl", "statement"]);
-    let lr_parser = LrParserTableGenerator { grammar, lexemes };
+    let lr_parser_tg = LrParserTableGenerator { grammar, lexemes };
     println!("---");
     println!("create state 0 item set:");
-    let state0_item_set = lr_parser.create_state_0_item_set();
+    let state0_item_set = lr_parser_tg.create_state_0_item_set();
     print!(
         "{}",
         GrammarRefPrefixAndItemSetRef {
-            grammar_ref: &lr_parser.grammar,
+            grammar_ref: &lr_parser_tg.grammar,
             prefix: "0".to_owned(),
             item_set: &state0_item_set,
         }
     );
     println!("---");
     println!("following \"program\" from state 0 item set to make next item set state.");
-    let state1_item_set = lr_parser.follow(&state0_item_set, "program");
+    let state1_item_set = lr_parser_tg.follow(&state0_item_set, "program");
     print!(
         "{}",
         GrammarRefPrefixAndItemSetRef {
-            grammar_ref: &lr_parser.grammar,
+            grammar_ref: &lr_parser_tg.grammar,
             prefix: "1".to_owned(),
             item_set: &state1_item_set,
         }
     );
     println!("---");
     println!("generate lr parse table:");
-    let lr_parser_table = lr_parser.generate_table();
+    let lr_parser_table = lr_parser_tg.generate_table();
     println!("{:#?}", lr_parser_table);
     println!("---");
+    let lr_parser = LrParser::new(lr_parser_table);
 }
