@@ -45,6 +45,25 @@ pub struct AstNode<S> {
     children: Vec<AstNode<S>>,
 }
 
+impl<S: std::fmt::Display> std::fmt::Display for AstNode<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn draw_node<S: std::fmt::Display>(mut prefix: String, node: &AstNode<S>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            if let Some(sym) = &node.value {
+                writeln!(f, "{}{}", prefix, sym)?;
+            } else {
+                writeln!(f, "{}Root", prefix)?;
+            }
+            prefix += "  ";
+            for child in &node.children {
+                draw_node(prefix.clone(), child, f)?;
+            }
+            Ok(())
+        }
+        draw_node("".to_owned(), self, f)?;
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct LrParser<S> {
     table: LrParserTable<S>,
@@ -428,5 +447,5 @@ fn test_lr_parser() {
     println!("{:?}", lr_parser);
     println!("");
     println!("result:");
-    println!("{:?}", lr_parser.forest);
+    println!("{}", lr_parser.forest[0]);
 }
