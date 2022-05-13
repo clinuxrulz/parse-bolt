@@ -224,7 +224,7 @@ impl<S> LrParser<S> {
         LrParser {
             table,
             state: 0,
-            stack: Vec::new(),
+            stack: vec![0],
             forest: Vec::new(),
         }
     }
@@ -238,6 +238,7 @@ impl<S> LrParser<S> {
                 if let Some(shift) = state.shifts.get(&sym) {
                     self.stack.push(self.state);
                     self.state = *shift;
+                    state = &self.table.states[self.state];
                     self.forest.push(AstNode { value: Some(sym.clone()), children: Vec::new(), });
                     again = false;
                 }
@@ -245,7 +246,6 @@ impl<S> LrParser<S> {
                     break;
                 }
                 if let Some((consume, rule_name_op)) = &state.reduce_op {
-                    state = &self.table.states[self.state];
                     let mut leaves: Vec<AstNode<S>> = Vec::new();
                     for _i in 0..*consume {
                         leaves.push(self.forest.pop().unwrap());
@@ -257,6 +257,8 @@ impl<S> LrParser<S> {
                             children: leaves,
                         }
                     );
+                    self.state = self.stack.pop().unwrap();
+                    state = &self.table.states[self.state];
                     self.state = *state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap();
                 }
             }
