@@ -230,58 +230,40 @@ impl<S> LrParser<S> {
     }
 
     pub fn advance(&mut self, sym_op: Option<S>) -> Result<bool,String> where S: Clone + PartialEq + Eq + Hash {
-        let state = &self.table.states[self.state];
-        //
-        if let Some((consume, rule_name_op)) = &state.reduce_op {
-            let mut leaves: Vec<AstNode<S>> = Vec::new();
-            for _i in 0..*consume {
-                self.stack.pop();
-                leaves.push(self.forest.pop().unwrap());
-            }
-            leaves.reverse();
-            self.forest.push(
-                AstNode {
-                    value: Option::<S>::clone(rule_name_op),
-                    children: leaves,
-                }
-            );
-            // hack
-            self.state = *state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap();
-            //
-        }
-        //
-        let state = &self.table.states[self.state];
-        //
+        let mut state;
         if let Some(sym) = sym_op {
-            let shift_op = state.shifts.get(&sym);
-            if shift_op.is_none() {
-                return Err("syntax error".to_owned());
-            }
-            let shift = shift_op.unwrap();
-            self.stack.push(self.state);
-            self.state = *shift;
-            self.forest.push(AstNode { value: Some(sym), children: Vec::new(), });
-            return Ok(false);
-        } else {
-            // handle eof
-            if let Some((consume, rule_name_op)) = &state.reduce_op {
-                let mut leaves: Vec<AstNode<S>> = Vec::new();
-                for _i in 0..*consume {
-                    self.stack.pop();
-                    leaves.push(self.forest.pop().unwrap());
+            loop {
+                state = &self.table.states[self.state];
+                let mut again = true;
+                if let Some(shift) = state.shifts.get(&sym) {
+                    self.stack.push(self.state);
+                    self.state = *shift;
+                    self.forest.push(AstNode { value: Some(sym.clone()), children: Vec::new(), });
+                    again = false;
                 }
-                leaves.reverse();
-                self.forest.push(
-                    AstNode {
-                        value: Option::<S>::clone(rule_name_op),
-                        children: leaves,
+                if !again {
+                    break;
+                }
+                if let Some((consume, rule_name_op)) = &state.reduce_op {
+                    state = &self.table.states[self.state];
+                    let mut leaves: Vec<AstNode<S>> = Vec::new();
+                    for _i in 0..*consume {
+                        leaves.push(self.forest.pop().unwrap());
                     }
-                );
-                return Ok(rule_name_op.is_none());
-            } else {
-                return Err("syntax error".to_owned());
+                    leaves.reverse();
+                    self.forest.push(
+                        AstNode {
+                            value: Option::<S>::clone(rule_name_op),
+                            children: leaves,
+                        }
+                    );
+                    self.state = self.stack.pop().unwrap();
+                    state = &self.table.states[self.state];
+                    self.state = *state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap();
+                }
             }
         }
+        return Ok(false);
     }
 }
 
