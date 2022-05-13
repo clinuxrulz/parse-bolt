@@ -48,7 +48,6 @@ pub struct AstNode<S> {
 #[derive(Debug)]
 pub struct LrParser<S> {
     table: LrParserTable<S>,
-    state: usize,
     stack: Vec<usize>,
     forest: Vec<AstNode<S>>,
 }
@@ -223,7 +222,6 @@ impl<S> LrParser<S> {
     pub fn new(table: LrParserTable<S>) -> LrParser<S> {
         LrParser {
             table,
-            state: 0,
             stack: vec![0],
             forest: Vec::new(),
         }
@@ -231,14 +229,15 @@ impl<S> LrParser<S> {
 
     pub fn advance(&mut self, sym_op: Option<S>) -> Result<bool,String> where S: Clone + PartialEq + Eq + Hash {
         let mut state;
+        let mut state_idx = self.stack[self.stack.len()-1];
         if let Some(sym) = sym_op {
             loop {
-                state = &self.table.states[self.state];
+                state = &self.table.states[state_idx];
                 let mut again = true;
                 if let Some(shift) = state.shifts.get(&sym) {
-                    self.stack.push(self.state);
-                    self.state = *shift;
-                    state = &self.table.states[self.state];
+                    self.stack.push(*shift);
+                    state_idx = *shift;
+                    state = &self.table.states[state_idx];
                     self.forest.push(AstNode { value: Some(sym.clone()), children: Vec::new(), });
                     again = false;
                 }
@@ -248,6 +247,7 @@ impl<S> LrParser<S> {
                 if let Some((consume, rule_name_op)) = &state.reduce_op {
                     let mut leaves: Vec<AstNode<S>> = Vec::new();
                     for _i in 0..*consume {
+                        self.stack.pop();
                         leaves.push(self.forest.pop().unwrap());
                     }
                     leaves.reverse();
@@ -257,9 +257,10 @@ impl<S> LrParser<S> {
                             children: leaves,
                         }
                     );
-                    self.state = self.stack.pop().unwrap();
-                    state = &self.table.states[self.state];
-                    self.state = *state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap();
+                    state_idx = self.stack[self.stack.len()-1];
+                    state = &self.table.states[state_idx];
+                    self.stack.push(*state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap());
+                    state_idx = self.stack[self.stack.len()-1];
                 }
             }
         }
