@@ -257,8 +257,6 @@ impl<S> LrParser<S> {
                             children: leaves,
                         }
                     );
-                    self.state = self.stack.pop().unwrap();
-                    state = &self.table.states[self.state];
                     self.state = *state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap();
                 }
             }
