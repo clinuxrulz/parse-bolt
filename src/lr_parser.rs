@@ -282,7 +282,31 @@ impl<S> LrParser<S> {
                     state_idx = self.stack[self.stack.len()-1];
                 }
             }
-        }
+        } else {
+            state = &self.table.states[state_idx];
+            while let Some((consume, rule_name_op)) = &state.reduce_op {
+                let mut leaves: Vec<AstNode<S>> = Vec::new();
+                for _i in 0..*consume {
+                    self.stack.pop();
+                    leaves.push(self.forest.pop().unwrap());
+                }
+                leaves.reverse();
+                self.forest.push(
+                    AstNode {
+                        value: Option::<S>::clone(rule_name_op),
+                        children: leaves,
+                    }
+                );
+                if rule_name_op.is_none() {
+                    break;
+                }
+                state_idx = self.stack[self.stack.len()-1];
+                state = &self.table.states[state_idx];
+                self.stack.push(*state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap());
+                state_idx = self.stack[self.stack.len()-1];
+                state = &self.table.states[state_idx];
+            }
+    }
         return Ok(false);
     }
 }
