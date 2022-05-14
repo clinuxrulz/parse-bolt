@@ -173,9 +173,10 @@ impl<S> ParserBase2<S> {
     fn generate_grammar(&self) -> Vec<crate::lr_parser::Rule<RuleOrToken<S>>> where S: Clone+PartialEq+Eq+std::hash::Hash {
         let mut name_gen = GrammarNameGen::new();
         let mut rules = Vec::new();
+        let gap = crate::lr_parser::Rule::new(None, Vec::new());
+        rules.push(gap);
         self.generate_grammar_(&mut name_gen, &mut rules);
-        rules.push(crate::lr_parser::Rule::new(None, vec![name_gen.gen_name(self).0]));
-        rules.reverse();
+        rules[0] = crate::lr_parser::Rule::new(None, vec![name_gen.gen_name(self).0]);
         rules
     }
 
@@ -188,6 +189,9 @@ impl<S> ParserBase2<S> {
                 if !is_new {
                     return;
                 }
+                let gap_idx = rules_out.len();
+                let gap = crate::lr_parser::Rule::new(None, Vec::new());
+                rules_out.push(gap);
                 let mut parts = Vec::new();
                 for parser in parsers {
                     parser.generate_grammar_(name_gen, rules_out);
@@ -195,7 +199,7 @@ impl<S> ParserBase2<S> {
                     parts.push(part);
                 }
                 let rule = crate::lr_parser::Rule::new(Some(name), parts);
-                rules_out.push(rule);
+                rules_out[gap_idx] = rule;
             }
             ParserBase2::Choice { parsers } => {
                 let (name, is_new) = name_gen.gen_name(self);
