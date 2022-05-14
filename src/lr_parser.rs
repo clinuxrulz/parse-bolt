@@ -20,10 +20,7 @@ pub struct Rule<S> {
 
 impl<S> Rule<S> {
     pub fn new(name_op: Option<S>, parts: Vec<S>) -> Rule<S> {
-        Rule {
-            name_op,
-            parts,
-        }
+        Rule { name_op, parts }
     }
 }
 
@@ -57,7 +54,11 @@ pub struct AstNode<S> {
 
 impl<S: std::fmt::Display> std::fmt::Display for AstNode<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn draw_node<S: std::fmt::Display>(mut prefix: String, node: &AstNode<S>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn draw_node<S: std::fmt::Display>(
+            mut prefix: String,
+            node: &AstNode<S>,
+            f: &mut std::fmt::Formatter<'_>,
+        ) -> std::fmt::Result {
             if let Some(sym) = &node.value {
                 writeln!(f, "{}{}", prefix, sym)?;
             } else {
@@ -231,10 +232,7 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
                     stack.push(next_item_set);
                 }
             }
-            let lr_parse_table_state = LrParserTableState {
-                shifts,
-                reduce_op,
-            };
+            let lr_parse_table_state = LrParserTableState { shifts, reduce_op };
             states.insert(state_index, Some(lr_parse_table_state));
         }
         let mut states2 = Vec::new();
@@ -256,9 +254,12 @@ impl<S> LrParser<S> {
         }
     }
 
-    pub fn advance(&mut self, sym_op: Option<S>) -> Result<bool,String> where S: Clone + PartialEq + Eq + Hash {
+    pub fn advance(&mut self, sym_op: Option<S>) -> Result<bool, String>
+    where
+        S: Clone + PartialEq + Eq + Hash,
+    {
         let mut state;
-        let mut state_idx = self.stack[self.stack.len()-1];
+        let mut state_idx = self.stack[self.stack.len() - 1];
         if let Some(sym) = sym_op {
             loop {
                 state = &self.table.states[state_idx];
@@ -267,7 +268,10 @@ impl<S> LrParser<S> {
                     self.stack.push(*shift);
                     state_idx = *shift;
                     state = &self.table.states[state_idx];
-                    self.forest.push(AstNode { value: Some(sym.clone()), children: Vec::new(), });
+                    self.forest.push(AstNode {
+                        value: Some(sym.clone()),
+                        children: Vec::new(),
+                    });
                     again = false;
                 }
                 if !again {
@@ -280,16 +284,15 @@ impl<S> LrParser<S> {
                         leaves.push(self.forest.pop().unwrap());
                     }
                     leaves.reverse();
-                    self.forest.push(
-                        AstNode {
-                            value: Option::<S>::clone(rule_name_op),
-                            children: leaves,
-                        }
-                    );
-                    state_idx = self.stack[self.stack.len()-1];
+                    self.forest.push(AstNode {
+                        value: Option::<S>::clone(rule_name_op),
+                        children: leaves,
+                    });
+                    state_idx = self.stack[self.stack.len() - 1];
                     state = &self.table.states[state_idx];
-                    self.stack.push(*state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap());
-                    state_idx = self.stack[self.stack.len()-1];
+                    self.stack
+                        .push(*state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap());
+                    state_idx = self.stack[self.stack.len() - 1];
                 }
             }
         } else {
@@ -301,22 +304,21 @@ impl<S> LrParser<S> {
                     leaves.push(self.forest.pop().unwrap());
                 }
                 leaves.reverse();
-                self.forest.push(
-                    AstNode {
-                        value: Option::<S>::clone(rule_name_op),
-                        children: leaves,
-                    }
-                );
+                self.forest.push(AstNode {
+                    value: Option::<S>::clone(rule_name_op),
+                    children: leaves,
+                });
                 if rule_name_op.is_none() {
                     break;
                 }
-                state_idx = self.stack[self.stack.len()-1];
+                state_idx = self.stack[self.stack.len() - 1];
                 state = &self.table.states[state_idx];
-                self.stack.push(*state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap());
-                state_idx = self.stack[self.stack.len()-1];
+                self.stack
+                    .push(*state.shifts.get(rule_name_op.as_ref().unwrap()).unwrap());
+                state_idx = self.stack[self.stack.len() - 1];
                 state = &self.table.states[state_idx];
             }
-    }
+        }
         return Ok(false);
     }
 }

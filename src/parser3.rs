@@ -1,6 +1,7 @@
 use super::TokenStream;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 pub struct Pos {
@@ -14,76 +15,90 @@ pub struct Span {
     pub to: Pos,
 }
 
-// Trying again with LL(1) PEG. The other parsers are too slow.
 pub struct Parser<Err, T, A> {
-    base: Rc<dyn ParserBase<Err, T, A>>,
+    phantom_err: PhantomData<Err>,
+    phantom_a: PhantomData<A>,
+    base: Rc<ParserBase<T>>,
 }
 
-enum ParserBaseResult<Err, T, A> {
-    Suspend(Parser<Err, T, A>),
-    Success(A),
-    Error { msg: Err, consumed: bool },
-}
+impl<Err, T, A> Parser<Err, T, A> {
+    fn wrap_base(base: ParserBase<T>) -> Parser<Err, T, A> {
+        Parser {
+            phantom_err: PhantomData,
+            phantom_a: PhantomData,
+            base: Rc::new(base),
+        }
+    }
 
-trait ParserBase<Err, T, A> {
-    fn run(&self, tokens: TokenStream<T>) -> ParserBaseResult<Err, T, A>;
-}
+    pub fn seq2<B>(&self, parser2: &Parser<Err, T, B>) -> Parser<Err, T, (A, B)> {
+        Parser::wrap_base(ParserBase::Seq {
+            parsers: vec![Rc::clone(&self.base), Rc::clone(&parser2.base)],
+        })
+    }
 
-struct EmptyParser;
-
-impl<Err, T> ParserBase<Err, T, ()> for EmptyParser {
-    fn run(&self, _tokens: TokenStream<T>) -> ParserBaseResult<Err, T, ()> {
-        ParserBaseResult::Success(())
+    pub fn choice(parsers: Vec<Parser<Err, T, A>>) -> Parser<Err, T, A> {
+        Parser::wrap_base(ParserBase::Choice {
+            parsers: parsers
+                .iter()
+                .map(|parser| Rc::clone(&parser.base))
+                .collect(),
+        })
     }
 }
 
-struct SatisfyParser<T> {
-    pred: Rc<RefCell<dyn FnMut(&T) -> bool>>,
+impl<Err, T> Parser<Err, T, T> {
+    pub fn match_(t: T) -> Parser<Err, T, T> {
+        Parser::wrap_base(ParserBase::Match { sym: t })
+    }
 }
 
-/*
-impl<Err: From<String>,T> ParserBase<Err,T,T> for SatisfyParser<T> {
-    fn run(&self, tokens: TokenStream<T>) -> ParserBaseResult<Err,T,T> {
-        tokens.read();
+impl<Err, T> Parser<Err, T, ()> {
+    pub fn empty() -> Parser<Err, T, ()> {
+        Parser::wrap_base(ParserBase::Seq {
+            parsers: Vec::new(),
+        })
     }
-}*/
+}
 
 struct GrammarNameGen<S> {
     next_id: usize,
-    grammar_to_name: HashMap<ParserBase2<S>,usize>,
+    grammar_to_name: HashMap<ParserBase<S>, usize>,
 }
 
 impl<S> GrammarNameGen<S> {
     fn new() -> GrammarNameGen<S> {
         GrammarNameGen {
             next_id: 0,
-            grammar_to_name: HashMap::new()
+            grammar_to_name: HashMap::new(),
         }
     }
 }
 
 impl<S> GrammarNameGen<S> {
-    fn gen_name(&mut self, parser: &ParserBase2<S>) -> (RuleOrToken<S>,bool) where S: Clone+PartialEq+Eq+std::hash::Hash {
+    fn gen_name(&mut self, parser: &ParserBase<S>) -> (RuleOrToken<S>, bool)
+    where
+        S: Clone + PartialEq + Eq + std::hash::Hash,
+    {
         match parser {
-            ParserBase2::Match { sym, } => {
+            ParserBase::Match { sym } => {
                 return (RuleOrToken::Token(S::clone(sym)), false);
             }
-            ParserBase2::Seq { parsers, } => {
+            ParserBase::Seq { parsers } => {
                 if let Some(id) = self.grammar_to_name.get(parser) {
                     return (RuleOrToken::Rule(*id), false);
                 }
                 let id = self.next_id;
                 self.next_id += 1;
-                self.grammar_to_name.insert(ParserBase2::clone(parser), id);
+                self.grammar_to_name.insert(ParserBase::clone(parser), id);
                 return (RuleOrToken::Rule(id), true);
             }
-            ParserBase2::Choice { parsers, } => {
+            ParserBase::Choice { parsers } => {
                 if let Some(id) = self.grammar_to_name.get(parser) {
                     return (RuleOrToken::Rule(*id), false);
                 }
                 let id = self.next_id;
                 self.next_id += 1;
-                self.grammar_to_name.insert(ParserBase2::clone(parser), id);
+                self.grammar_to_name.insert(ParserBase::clone(parser), id);
                 return (RuleOrToken::Rule(id), true);
             }
         }
@@ -96,81 +111,91 @@ enum RuleOrToken<S> {
     Token(S),
 }
 
-#[derive(PartialEq,Eq,Hash)]
-enum ParserBase2<S> {
-    Match { sym: S, },
-    Seq { parsers: Vec<Rc<ParserBase2<S>>>, },
-    Choice { parsers: Vec<Rc<ParserBase2<S>>>, },
+#[derive(PartialEq, Eq, Hash)]
+enum ParserBase<S> {
+    Match { sym: S },
+    Seq { parsers: Vec<Rc<ParserBase<S>>> },
+    Choice { parsers: Vec<Rc<ParserBase<S>>> },
 }
 
-impl<S> ParserBase2<S> {
-    pub fn optimise(&mut self) where S: Clone {
-        fn optimise_<S: Clone>(a: ParserBase2<S>) -> ParserBase2<S> {
+impl<S> ParserBase<S> {
+    pub fn optimise(&mut self)
+    where
+        S: Clone,
+    {
+        fn optimise_<S: Clone>(a: ParserBase<S>) -> ParserBase<S> {
             match a {
-                ParserBase2::Match { sym: _ } => {
+                ParserBase::Match { sym: _ } => {
                     return a;
-                },
-                ParserBase2::Seq { parsers } => {
-                    let parsers2: Vec<ParserBase2<S>> = parsers.iter().map(|parser| optimise_(ParserBase2::clone(&**parser))).collect();
+                }
+                ParserBase::Seq { parsers } => {
+                    let parsers2: Vec<ParserBase<S>> = parsers
+                        .iter()
+                        .map(|parser| optimise_(ParserBase::clone(&**parser)))
+                        .collect();
                     let mut parsers3 = Vec::new();
                     for parser in parsers2 {
                         match parser {
-                            ParserBase2::Seq { parsers: parsers4 } => {
+                            ParserBase::Seq { parsers: parsers4 } => {
                                 for parser2 in parsers4 {
                                     parsers3.push(parser2);
                                 }
-                            },
+                            }
                             _ => {
                                 parsers3.push(Rc::new(parser));
                             }
                         }
                     }
-                    return ParserBase2::Seq { parsers: parsers3 };
-                },
-                ParserBase2::Choice { parsers } => {
-                    let parsers2: Vec<ParserBase2<S>> = parsers.iter().map(|parser| optimise_(ParserBase2::clone(&**parser))).collect();
+                    return ParserBase::Seq { parsers: parsers3 };
+                }
+                ParserBase::Choice { parsers } => {
+                    let parsers2: Vec<ParserBase<S>> = parsers
+                        .iter()
+                        .map(|parser| optimise_(ParserBase::clone(&**parser)))
+                        .collect();
                     let mut parsers3 = Vec::new();
                     for parser in parsers2 {
                         match parser {
-                            ParserBase2::Choice { parsers: parsers4 } => {
+                            ParserBase::Choice { parsers: parsers4 } => {
                                 for parser2 in parsers4 {
                                     parsers3.push(parser2);
                                 }
-                            },
+                            }
                             _ => {
                                 parsers3.push(Rc::new(parser));
                             }
                         }
                     }
-                    return ParserBase2::Choice { parsers: parsers3 };
+                    return ParserBase::Choice { parsers: parsers3 };
                 }
             }
         }
-        let mut tmp: ParserBase2<S> = ParserBase2::Seq { parsers: vec![], };
+        let mut tmp: ParserBase<S> = ParserBase::Seq { parsers: vec![] };
         std::mem::swap(&mut tmp, self);
         tmp = optimise_(tmp);
         *self = tmp;
     }
 }
 
-impl<S: Clone> Clone for ParserBase2<S> {
+impl<S: Clone> Clone for ParserBase<S> {
     fn clone(&self) -> Self {
         match self {
-            ParserBase2::Match { sym, } => {
-                ParserBase2::Match { sym: S::clone(sym), }
-            }
-            ParserBase2::Seq { parsers, } => {
-                ParserBase2::Seq { parsers: parsers.iter().map(Rc::clone).collect(), }
-            }
-            ParserBase2::Choice { parsers } => {
-                ParserBase2::Choice { parsers: parsers.iter().map(Rc::clone).collect(), }
-            }
+            ParserBase::Match { sym } => ParserBase::Match { sym: S::clone(sym) },
+            ParserBase::Seq { parsers } => ParserBase::Seq {
+                parsers: parsers.iter().map(Rc::clone).collect(),
+            },
+            ParserBase::Choice { parsers } => ParserBase::Choice {
+                parsers: parsers.iter().map(Rc::clone).collect(),
+            },
         }
     }
 }
 
-impl<S> ParserBase2<S> {
-    fn generate_grammar(&self) -> Vec<crate::lr_parser::Rule<RuleOrToken<S>>> where S: Clone+PartialEq+Eq+std::hash::Hash {
+impl<S> ParserBase<S> {
+    fn generate_grammar(&self) -> Vec<crate::lr_parser::Rule<RuleOrToken<S>>>
+    where
+        S: Clone + PartialEq + Eq + std::hash::Hash,
+    {
         let mut name_gen = GrammarNameGen::new();
         let mut rules = Vec::new();
         let gap = crate::lr_parser::Rule::new(None, Vec::new());
@@ -180,11 +205,16 @@ impl<S> ParserBase2<S> {
         rules
     }
 
-    fn generate_grammar_(&self, name_gen: &mut GrammarNameGen<S>, rules_out: &mut Vec<crate::lr_parser::Rule<RuleOrToken<S>>>) where S: Clone+PartialEq+Eq+std::hash::Hash {
+    fn generate_grammar_(
+        &self,
+        name_gen: &mut GrammarNameGen<S>,
+        rules_out: &mut Vec<crate::lr_parser::Rule<RuleOrToken<S>>>,
+    ) where
+        S: Clone + PartialEq + Eq + std::hash::Hash,
+    {
         match self {
-            ParserBase2::Match { sym, } => {
-            }
-            ParserBase2::Seq { parsers, } => {
+            ParserBase::Match { sym: _ } => {}
+            ParserBase::Seq { parsers } => {
                 let (name, is_new) = name_gen.gen_name(self);
                 if !is_new {
                     return;
@@ -201,7 +231,7 @@ impl<S> ParserBase2<S> {
                 let rule = crate::lr_parser::Rule::new(Some(name), parts);
                 rules_out[gap_idx] = rule;
             }
-            ParserBase2::Choice { parsers } => {
+            ParserBase::Choice { parsers } => {
                 let (name, is_new) = name_gen.gen_name(self);
                 if !is_new {
                     return;
@@ -209,7 +239,10 @@ impl<S> ParserBase2<S> {
                 for parser in parsers {
                     parser.generate_grammar_(name_gen, rules_out);
                     let (choice_name, _) = name_gen.gen_name(parser);
-                    let rule = crate::lr_parser::Rule::new(Some(RuleOrToken::clone(&name)), vec![choice_name]);
+                    let rule = crate::lr_parser::Rule::new(
+                        Some(RuleOrToken::clone(&name)),
+                        vec![choice_name],
+                    );
                     rules_out.push(rule);
                 }
             }
@@ -219,19 +252,18 @@ impl<S> ParserBase2<S> {
 
 #[test]
 fn test_combinator_to_grammar() {
-    let combinator =
-        ParserBase2::Seq {
-            parsers: vec![
-                Rc::new(ParserBase2::Match { sym: 'A' }),
-                Rc::new(ParserBase2::Match { sym: 'B' }),
-                Rc::new(ParserBase2::Choice {
-                    parsers: vec![
-                        Rc::new(ParserBase2::Match { sym: 'C' }),
-                        Rc::new(ParserBase2::Match { sym: 'D' }),
-                    ]
-                })
-            ]
-        };
+    let combinator = ParserBase::Seq {
+        parsers: vec![
+            Rc::new(ParserBase::Match { sym: 'A' }),
+            Rc::new(ParserBase::Match { sym: 'B' }),
+            Rc::new(ParserBase::Choice {
+                parsers: vec![
+                    Rc::new(ParserBase::Match { sym: 'C' }),
+                    Rc::new(ParserBase::Match { sym: 'D' }),
+                ],
+            }),
+        ],
+    };
     let rules = combinator.generate_grammar();
     println!("{:?}", rules);
 }

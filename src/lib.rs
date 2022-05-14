@@ -5,7 +5,7 @@ pub mod kotlin;
 pub mod lr_parser;
 //mod parser;
 mod parser2;
-mod parser3;
+pub mod parser3;
 //mod parser_byte_code;
 pub mod python;
 mod test;
