@@ -74,6 +74,7 @@ impl<S> GrammarNameGen<S> {
                 }
                 let id = self.next_id;
                 self.next_id += 1;
+                self.grammar_to_name.insert(ParserBase2::clone(parser), id);
                 return (RuleOrToken::Rule(id), true);
             }
             ParserBase2::Choice { parsers, } => {
@@ -82,6 +83,7 @@ impl<S> GrammarNameGen<S> {
                 }
                 let id = self.next_id;
                 self.next_id += 1;
+                self.grammar_to_name.insert(ParserBase2::clone(parser), id);
                 return (RuleOrToken::Rule(id), true);
             }
         }
@@ -168,7 +170,16 @@ impl<S: Clone> Clone for ParserBase2<S> {
 }
 
 impl<S> ParserBase2<S> {
-    fn generate_grammar(&self, name_gen: &mut GrammarNameGen<S>, rules_out: &mut Vec<crate::lr_parser::Rule<RuleOrToken<S>>>) where S: Clone+PartialEq+Eq+std::hash::Hash {
+    fn generate_grammar(&self) -> Vec<crate::lr_parser::Rule<RuleOrToken<S>>> where S: Clone+PartialEq+Eq+std::hash::Hash {
+        let mut name_gen = GrammarNameGen::new();
+        let mut rules = Vec::new();
+        self.generate_grammar_(&mut name_gen, &mut rules);
+        rules.push(crate::lr_parser::Rule::new(None, vec![name_gen.gen_name(self).0]));
+        rules.reverse();
+        rules
+    }
+
+    fn generate_grammar_(&self, name_gen: &mut GrammarNameGen<S>, rules_out: &mut Vec<crate::lr_parser::Rule<RuleOrToken<S>>>) where S: Clone+PartialEq+Eq+std::hash::Hash {
         match self {
             ParserBase2::Match { sym, } => {
             }
@@ -179,7 +190,7 @@ impl<S> ParserBase2<S> {
                 }
                 let mut parts = Vec::new();
                 for parser in parsers {
-                    parser.generate_grammar(name_gen, rules_out);
+                    parser.generate_grammar_(name_gen, rules_out);
                     let (part, _) = name_gen.gen_name(parser);
                     parts.push(part);
                 }
@@ -192,7 +203,7 @@ impl<S> ParserBase2<S> {
                     return;
                 }
                 for parser in parsers {
-                    parser.generate_grammar(name_gen, rules_out);
+                    parser.generate_grammar_(name_gen, rules_out);
                     let (choice_name, _) = name_gen.gen_name(parser);
                     let rule = crate::lr_parser::Rule::new(Some(RuleOrToken::clone(&name)), vec![choice_name]);
                     rules_out.push(rule);
@@ -217,7 +228,6 @@ fn test_combinator_to_grammar() {
                 })
             ]
         };
-    let mut rules = Vec::new();
-    combinator.generate_grammar(&mut GrammarNameGen::new(), &mut rules);
+    let rules = combinator.generate_grammar();
     println!("{:?}", rules);
 }
