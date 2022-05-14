@@ -12,9 +12,19 @@ pub struct Grammar<S>(Vec<Rule<S>>);
 
 pub struct Lexemes<S>(Vec<S>);
 
+#[derive(Debug)]
 pub struct Rule<S> {
     name_op: Option<S>,
     parts: Vec<S>,
+}
+
+impl<S> Rule<S> {
+    pub fn new(name_op: Option<S>, parts: Vec<S>) -> Rule<S> {
+        Rule {
+            name_op,
+            parts,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

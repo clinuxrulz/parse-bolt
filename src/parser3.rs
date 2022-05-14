@@ -1,5 +1,6 @@
 use super::TokenStream;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 pub struct Pos {
@@ -46,3 +47,93 @@ impl<Err: From<String>,T> ParserBase<Err,T,T> for SatisfyParser<T> {
         tokens.read();
     }
 }*/
+
+struct GrammarNameGen<S> {
+    next_id: usize,
+    grammar_to_name: HashMap<ParserBase2<S>,usize>,
+}
+
+impl<S> GrammarNameGen<S> {
+    fn new() -> GrammarNameGen<S> {
+        GrammarNameGen {
+            next_id: 0,
+            grammar_to_name: HashMap::new()
+        }
+    }
+}
+
+impl<S> GrammarNameGen<S> {
+    fn gen_name(&mut self, parser: &ParserBase2<S>) -> (RuleOrToken<S>,bool) where S: Clone+PartialEq+Eq+std::hash::Hash {
+        match parser {
+            ParserBase2::SeqParser { parser1, parser2, } => {
+                if let Some(id) = self.grammar_to_name.get(parser) {
+                    return (RuleOrToken::Rule(*id), false);
+                }
+                let id = self.next_id;
+                self.next_id += 1;
+                return (RuleOrToken::Rule(id), true);
+            }
+            ParserBase2::MatchParser { sym, } => {
+                return (RuleOrToken::Token(S::clone(sym)), false);
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+enum RuleOrToken<S> {
+    Rule(usize),
+    Token(S),
+}
+
+#[derive(PartialEq,Eq,Hash)]
+enum ParserBase2<S> {
+    SeqParser { parser1: Rc<ParserBase2<S>>, parser2: Rc<ParserBase2<S>>, },
+    MatchParser { sym: S, },
+}
+
+impl<S: Clone> Clone for ParserBase2<S> {
+    fn clone(&self) -> Self {
+        match self {
+            ParserBase2::SeqParser { parser1, parser2, } => {
+                ParserBase2::SeqParser { parser1: Rc::clone(parser1), parser2: Rc::clone(parser2), }
+            }
+            ParserBase2::MatchParser { sym, } => {
+                ParserBase2::MatchParser { sym: S::clone(sym), }
+            }
+        }
+    }
+}
+
+impl<S> ParserBase2<S> {
+    fn generate_grammar(&self, name_gen: &mut GrammarNameGen<S>, rules_out: &mut Vec<crate::lr_parser::Rule<RuleOrToken<S>>>) where S: Clone+PartialEq+Eq+std::hash::Hash {
+        match self {
+            ParserBase2::SeqParser { parser1, parser2, } => {
+                let (name, is_new) = name_gen.gen_name(self);
+                if !is_new {
+                    return;
+                }
+                parser1.generate_grammar(name_gen, rules_out);
+                parser2.generate_grammar(name_gen, rules_out);
+                let (part1, _) = name_gen.gen_name(parser1);
+                let (part2, _) = name_gen.gen_name(parser2);
+                let rule = crate::lr_parser::Rule::new(Some(name), vec![part1, part2]);
+                rules_out.push(rule);
+            }
+            ParserBase2::MatchParser { sym, } => {
+            }
+        }
+    }
+}
+
+#[test]
+fn test_combinator_to_grammar() {
+    let combinator =
+        ParserBase2::SeqParser {
+            parser1: Rc::new(ParserBase2::MatchParser { sym: 'A' }),
+            parser2: Rc::new(ParserBase2::MatchParser { sym: 'B' }),
+        };
+    let mut rules = Vec::new();
+    combinator.generate_grammar(&mut GrammarNameGen::new(), &mut rules);
+    println!("{:?}", rules);
+}
