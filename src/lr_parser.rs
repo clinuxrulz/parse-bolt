@@ -54,10 +54,24 @@ pub struct ItemSet {
     items: Vec<Item>,
 }
 
-#[derive(Debug)]
 pub struct LrParserTableState<S> {
     shifts: HashMap<S, usize>,
-    reduce_op: Option<(usize, Option<S>)>,
+    reduce_op: Option<(usize, Option<S>, Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>)>,
+}
+
+impl<S: std::fmt::Debug> std::fmt::Debug for LrParserTableState<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct BasicEffectInto<'a>(&'a Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>);
+        impl<'a> std::fmt::Debug for BasicEffectInto<'a> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("Effect").finish_non_exhaustive()
+            }
+        }
+        f.debug_struct("LrParserTableState")
+            .field("shifts", &self.shifts)
+            .field("reduce_op", &self.reduce_op.as_ref().map(|(a,b,c)| (a,b,c.as_ref().map(BasicEffectInto))))
+            .finish()
+    }
 }
 
 #[derive(Debug)]
@@ -99,6 +113,7 @@ pub struct LrParser<S> {
     table: LrParserTable<S>,
     stack: Vec<usize>,
     forest: Vec<AstNode<S>>,
+    value_stack: Vec<Box<dyn Any>>,
 }
 
 impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
@@ -229,11 +244,11 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
                 continue;
             }
             let edges = self.edges(&item_set);
-            let mut reduce_op: Option<(usize, Option<S>)> = None;
+            let mut reduce_op: Option<(usize, Option<S>, Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>)> = None;
             for item in &item_set.items {
                 let rule = &self.grammar.0[item.rule];
                 if item.index == rule.parts.len() {
-                    reduce_op = Some((rule.parts.len(), rule.name_op.clone()));
+                    reduce_op = Some((rule.parts.len(), rule.name_op.clone(), rule.effect_op.as_ref().map(Rc::clone)));
                 }
             }
             let mut shifts: HashMap<S, usize> = HashMap::new();
@@ -270,10 +285,11 @@ impl<S> LrParser<S> {
             table,
             stack: vec![0],
             forest: Vec::new(),
+            value_stack: Vec::new(),
         }
     }
 
-    pub fn advance(&mut self, sym_op: Option<S>) -> Result<bool, String>
+    pub fn advance(&mut self, sym_op: Option<S>, mut value_op: Option<Box<dyn Any>>) -> Result<bool, String>
     where
         S: Clone + PartialEq + Eq + Hash,
     {
@@ -291,12 +307,17 @@ impl<S> LrParser<S> {
                         value: Some(sym.clone()),
                         children: Vec::new(),
                     });
+                    let mut tmp = None;
+                    std::mem::swap(&mut tmp, &mut value_op);
+                    if let Some(value) = tmp {
+                        self.value_stack.push(value);
+                    }
                     again = false;
                 }
                 if !again {
                     break;
                 }
-                if let Some((consume, rule_name_op)) = &state.reduce_op {
+                if let Some((consume, rule_name_op, effect_op)) = &state.reduce_op {
                     let mut leaves: Vec<AstNode<S>> = Vec::new();
                     for _i in 0..*consume {
                         self.stack.pop();
@@ -307,6 +328,9 @@ impl<S> LrParser<S> {
                         value: Option::<S>::clone(rule_name_op),
                         children: leaves,
                     });
+                    for effect in effect_op {
+                        effect.borrow_mut()(&mut self.value_stack);
+                    }
                     state_idx = self.stack[self.stack.len() - 1];
                     state = &self.table.states[state_idx];
                     self.stack
@@ -316,7 +340,7 @@ impl<S> LrParser<S> {
             }
         } else {
             state = &self.table.states[state_idx];
-            while let Some((consume, rule_name_op)) = &state.reduce_op {
+            while let Some((consume, rule_name_op, effect_op)) = &state.reduce_op {
                 let mut leaves: Vec<AstNode<S>> = Vec::new();
                 for _i in 0..*consume {
                     self.stack.pop();
@@ -327,6 +351,9 @@ impl<S> LrParser<S> {
                     value: Option::<S>::clone(rule_name_op),
                     children: leaves,
                 });
+                for effect in effect_op {
+                    effect.borrow_mut()(&mut self.value_stack);
+                }
                 if rule_name_op.is_none() {
                     break;
                 }
@@ -498,13 +525,13 @@ fn test_lr_parser() {
     let mut lr_parser = LrParser::new(lr_parser_table);
     println!("{:?}", lr_parser);
     println!("__advance statement");
-    let _ = lr_parser.advance(Some("statement"));
+    let _ = lr_parser.advance(Some("statement"), None);
     println!("{:?}", lr_parser);
     println!("__advance varDecl");
-    let _ = lr_parser.advance(Some("varDecl"));
+    let _ = lr_parser.advance(Some("varDecl"), None);
     println!("{:?}", lr_parser);
     println!("__advance eof");
-    let _ = lr_parser.advance(None);
+    let _ = lr_parser.advance(None, None);
     println!("{:?}", lr_parser);
     println!("");
     println!("result:");
