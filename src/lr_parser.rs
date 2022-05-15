@@ -1,5 +1,8 @@
+use std::any::Any;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use std::rc::Rc;
 
 // https://boxbase.org/entries/2019/oct/14/lr1-parsing-tables/
 
@@ -12,15 +15,31 @@ pub struct Grammar<S>(Vec<Rule<S>>);
 
 pub struct Lexemes<S>(Vec<S>);
 
-#[derive(Debug)]
 pub struct Rule<S> {
     name_op: Option<S>,
     parts: Vec<S>,
+    effect_op: Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>,
+}
+
+impl<S: std::fmt::Debug> std::fmt::Debug for Rule<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct BasicEffectInto<'a>(&'a Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>);
+        impl<'a> std::fmt::Debug for BasicEffectInto<'a> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("Effect").finish_non_exhaustive()
+            }
+        }
+        f.debug_struct("Rule")
+            .field("name_op", &self.name_op)
+            .field("parts", &self.parts)
+            .field("effect_op", &self.effect_op.as_ref().map(BasicEffectInto))
+            .finish()
+    }
 }
 
 impl<S> Rule<S> {
-    pub fn new(name_op: Option<S>, parts: Vec<S>) -> Rule<S> {
-        Rule { name_op, parts }
+    pub fn new(name_op: Option<S>, parts: Vec<S>, effect_op: Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>) -> Rule<S> {
+        Rule { name_op, parts, effect_op, }
     }
 }
 
@@ -418,26 +437,32 @@ fn test_lr_parser() {
         Rule {
             name_op: None,
             parts: vec!["program"],
+            effect_op: None,
         },
         Rule {
             name_op: Some("program"),
             parts: vec![],
+            effect_op: None,
         },
         Rule {
             name_op: Some("program"),
             parts: vec!["program", "declaration"],
+            effect_op: None,
         },
         Rule {
             name_op: Some("declaration"),
             parts: vec!["varDecl"],
+            effect_op: None,
         },
         Rule {
             name_op: Some("declaration"),
             parts: vec!["constDecl"],
+            effect_op: None,
         },
         Rule {
             name_op: Some("declaration"),
             parts: vec!["statement"],
+            effect_op: None,
         },
     ]);
     let lexemes = Lexemes(vec!["varDecl", "constDecl", "statement"]);

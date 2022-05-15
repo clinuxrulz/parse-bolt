@@ -198,10 +198,10 @@ impl<S> ParserBase<S> {
     {
         let mut name_gen = GrammarNameGen::new();
         let mut rules = Vec::new();
-        let gap = crate::lr_parser::Rule::new(None, Vec::new());
+        let gap = crate::lr_parser::Rule::new(None, Vec::new(), None);
         rules.push(gap);
         self.generate_grammar_(&mut name_gen, &mut rules);
-        rules[0] = crate::lr_parser::Rule::new(None, vec![name_gen.gen_name(self).0]);
+        rules[0] = crate::lr_parser::Rule::new(None, vec![name_gen.gen_name(self).0], None);
         rules
     }
 
@@ -220,7 +220,7 @@ impl<S> ParserBase<S> {
                     return;
                 }
                 let gap_idx = rules_out.len();
-                let gap = crate::lr_parser::Rule::new(None, Vec::new());
+                let gap = crate::lr_parser::Rule::new(None, Vec::new(), None);
                 rules_out.push(gap);
                 let mut parts = Vec::new();
                 for parser in parsers {
@@ -228,7 +228,7 @@ impl<S> ParserBase<S> {
                     let (part, _) = name_gen.gen_name(parser);
                     parts.push(part);
                 }
-                let rule = crate::lr_parser::Rule::new(Some(name), parts);
+                let rule = crate::lr_parser::Rule::new(Some(name), parts, None);
                 rules_out[gap_idx] = rule;
             }
             ParserBase::Choice { parsers } => {
@@ -242,6 +242,7 @@ impl<S> ParserBase<S> {
                     let rule = crate::lr_parser::Rule::new(
                         Some(RuleOrToken::clone(&name)),
                         vec![choice_name],
+                        None,
                     );
                     rules_out.push(rule);
                 }
