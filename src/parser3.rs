@@ -238,6 +238,7 @@ impl<S> ParserBase<S> {
                         for _i in 0..num_parsers {
                             result.push(value_stack.pop().unwrap());
                         }
+                        result.reverse();
                         value_stack.push(Box::new(result) as Box<dyn Any>);
                     })))
                 );
