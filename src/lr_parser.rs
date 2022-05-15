@@ -13,7 +13,7 @@ pub struct LrParserTableGenerator<S> {
 
 impl<S> LrParserTableGenerator<S> {
     pub fn new(grammar: Grammar<S>, lexemes: Lexemes<S>) -> LrParserTableGenerator<S> {
-        LrParserTableGenerator { grammar, lexemes, }
+        LrParserTableGenerator { grammar, lexemes }
     }
 }
 
@@ -44,8 +44,16 @@ impl<S: std::fmt::Debug> std::fmt::Debug for Rule<S> {
 }
 
 impl<S> Rule<S> {
-    pub fn new(name_op: Option<S>, parts: Vec<S>, effect_op: Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>) -> Rule<S> {
-        Rule { name_op, parts, effect_op, }
+    pub fn new(
+        name_op: Option<S>,
+        parts: Vec<S>,
+        effect_op: Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>,
+    ) -> Rule<S> {
+        Rule {
+            name_op,
+            parts,
+            effect_op,
+        }
     }
 }
 
@@ -62,7 +70,11 @@ pub struct ItemSet {
 
 pub struct LrParserTableState<S> {
     shifts: HashMap<S, usize>,
-    reduce_op: Option<(usize, Option<S>, Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>)>,
+    reduce_op: Option<(
+        usize,
+        Option<S>,
+        Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>,
+    )>,
 }
 
 impl<S: std::fmt::Debug> std::fmt::Debug for LrParserTableState<S> {
@@ -75,7 +87,13 @@ impl<S: std::fmt::Debug> std::fmt::Debug for LrParserTableState<S> {
         }
         f.debug_struct("LrParserTableState")
             .field("shifts", &self.shifts)
-            .field("reduce_op", &self.reduce_op.as_ref().map(|(a,b,c)| (a,b,c.as_ref().map(BasicEffectInto))))
+            .field(
+                "reduce_op",
+                &self
+                    .reduce_op
+                    .as_ref()
+                    .map(|(a, b, c)| (a, b, c.as_ref().map(BasicEffectInto))),
+            )
             .finish()
     }
 }
@@ -250,11 +268,19 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
                 continue;
             }
             let edges = self.edges(&item_set);
-            let mut reduce_op: Option<(usize, Option<S>, Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>)> = None;
+            let mut reduce_op: Option<(
+                usize,
+                Option<S>,
+                Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>,
+            )> = None;
             for item in &item_set.items {
                 let rule = &self.grammar.0[item.rule];
                 if item.index == rule.parts.len() {
-                    reduce_op = Some((rule.parts.len(), rule.name_op.clone(), rule.effect_op.as_ref().map(Rc::clone)));
+                    reduce_op = Some((
+                        rule.parts.len(),
+                        rule.name_op.clone(),
+                        rule.effect_op.as_ref().map(Rc::clone),
+                    ));
                 }
             }
             let mut shifts: HashMap<S, usize> = HashMap::new();
@@ -295,7 +321,11 @@ impl<S> LrParser<S> {
         }
     }
 
-    pub fn advance(&mut self, sym_op: Option<S>, mut value_op: Option<Box<dyn Any>>) -> Result<bool, String>
+    pub fn advance(
+        &mut self,
+        sym_op: Option<S>,
+        mut value_op: Option<Box<dyn Any>>,
+    ) -> Result<bool, String>
     where
         S: Clone + PartialEq + Eq + Hash,
     {

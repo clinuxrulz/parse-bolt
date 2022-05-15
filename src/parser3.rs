@@ -101,7 +101,7 @@ impl<S> GrammarNameGen<S> {
                 self.next_id += 1;
                 self.grammar_to_name.insert(ParserBase::clone(parser), id);
                 return (RuleOrToken::Rule(id), true);
-            },
+            }
             ParserBase::AndThenEffect { parser, effect } => {
                 if let Some(id) = self.grammar_to_name.get(parser) {
                     return (RuleOrToken::Rule(*id), false);
@@ -122,19 +122,41 @@ enum RuleOrToken<S> {
 }
 
 enum ParserBase<S> {
-    Match { sym: S },
-    Seq { parsers: Vec<Rc<ParserBase<S>>> },
-    Choice { parsers: Vec<Rc<ParserBase<S>>> },
-    AndThenEffect { parser: Rc<ParserBase<S>>, effect: Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>> }
+    Match {
+        sym: S,
+    },
+    Seq {
+        parsers: Vec<Rc<ParserBase<S>>>,
+    },
+    Choice {
+        parsers: Vec<Rc<ParserBase<S>>>,
+    },
+    AndThenEffect {
+        parser: Rc<ParserBase<S>>,
+        effect: Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>,
+    },
 }
 
 impl<S: PartialEq> PartialEq for ParserBase<S> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Match { sym: l_sym }, Self::Match { sym: r_sym }) => *l_sym == *r_sym,
-            (Self::Seq { parsers: l_parsers }, Self::Seq { parsers: r_parsers }) => *l_parsers == *r_parsers,
-            (Self::Choice { parsers: l_parsers }, Self::Choice { parsers: r_parsers }) => *l_parsers == *r_parsers,
-            (Self::AndThenEffect { parser: l_parser, effect: l_effect }, Self::AndThenEffect { parser: r_parser, effect: r_effect }) => {
+            (Self::Seq { parsers: l_parsers }, Self::Seq { parsers: r_parsers }) => {
+                *l_parsers == *r_parsers
+            }
+            (Self::Choice { parsers: l_parsers }, Self::Choice { parsers: r_parsers }) => {
+                *l_parsers == *r_parsers
+            }
+            (
+                Self::AndThenEffect {
+                    parser: l_parser,
+                    effect: l_effect,
+                },
+                Self::AndThenEffect {
+                    parser: r_parser,
+                    effect: r_effect,
+                },
+            ) => {
                 let l_ptr: *const RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)> = &**l_effect;
                 let r_ptr: *const RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)> = &**r_effect;
                 *l_parser == *r_parser && l_ptr == r_ptr
@@ -152,16 +174,16 @@ impl<S: PartialEq + Eq + std::hash::Hash> std::hash::Hash for ParserBase<S> {
             Self::Match { sym } => {
                 state.write_usize(0);
                 sym.hash(state);
-            },
+            }
             Self::Seq { parsers } => {
                 state.write_usize(1);
                 parsers.hash(state);
-            },
+            }
             Self::Choice { parsers } => {
                 state.write_usize(2);
                 parsers.hash(state);
-            },
-            Self::AndThenEffect { parser, effect, } => {
+            }
+            Self::AndThenEffect { parser, effect } => {
                 state.write_usize(3);
                 parser.hash(state);
                 let ptr: *const RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)> = &**effect;
@@ -221,8 +243,11 @@ impl<S> ParserBase<S> {
                         }
                     }
                     return ParserBase::Choice { parsers: parsers3 };
-                },
-                ParserBase::AndThenEffect { parser: _, effect: _, } => {
+                }
+                ParserBase::AndThenEffect {
+                    parser: _,
+                    effect: _,
+                } => {
                     return a;
                 }
             }
@@ -247,7 +272,7 @@ impl<S: Clone> Clone for ParserBase<S> {
             ParserBase::AndThenEffect { parser, effect } => ParserBase::AndThenEffect {
                 parser: Rc::clone(parser),
                 effect: Rc::clone(effect),
-            }
+            },
         }
     }
 }
@@ -293,14 +318,16 @@ impl<S> ParserBase<S> {
                 let rule = crate::lr_parser::Rule::new(
                     Some(name),
                     parts,
-                    Some(Rc::new(RefCell::new(move |value_stack: &mut Vec<Box<dyn Any>>| {
-                        let mut result = Vec::new();
-                        for _i in 0..num_parsers {
-                            result.push(value_stack.pop().unwrap());
-                        }
-                        result.reverse();
-                        value_stack.push(Box::new(result) as Box<dyn Any>);
-                    })))
+                    Some(Rc::new(RefCell::new(
+                        move |value_stack: &mut Vec<Box<dyn Any>>| {
+                            let mut result = Vec::new();
+                            for _i in 0..num_parsers {
+                                result.push(value_stack.pop().unwrap());
+                            }
+                            result.reverse();
+                            value_stack.push(Box::new(result) as Box<dyn Any>);
+                        },
+                    ))),
                 );
                 rules_out[gap_idx] = rule;
             }
@@ -320,7 +347,7 @@ impl<S> ParserBase<S> {
                     rules_out.push(rule);
                 }
             }
-            ParserBase::AndThenEffect { parser, effect, } => {
+            ParserBase::AndThenEffect { parser, effect } => {
                 let (name, is_new) = name_gen.gen_name(self);
                 if !is_new {
                     return;
@@ -330,7 +357,11 @@ impl<S> ParserBase<S> {
                 rules_out.push(gap);
                 parser.generate_grammar_(name_gen, rules_out);
                 let (inner_name, _) = name_gen.gen_name(parser);
-                rules_out[gap_idx] = crate::lr_parser::Rule::new(Some(name), vec![inner_name], Some(Rc::clone(effect)));
+                rules_out[gap_idx] = crate::lr_parser::Rule::new(
+                    Some(name),
+                    vec![inner_name],
+                    Some(Rc::clone(effect)),
+                );
             }
         }
     }
