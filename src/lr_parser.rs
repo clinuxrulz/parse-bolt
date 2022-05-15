@@ -11,9 +11,15 @@ pub struct LrParserTableGenerator<S> {
     lexemes: Lexemes<S>,
 }
 
-pub struct Grammar<S>(Vec<Rule<S>>);
+impl<S> LrParserTableGenerator<S> {
+    pub fn new(grammar: Grammar<S>, lexemes: Lexemes<S>) -> LrParserTableGenerator<S> {
+        LrParserTableGenerator { grammar, lexemes, }
+    }
+}
 
-pub struct Lexemes<S>(Vec<S>);
+pub struct Grammar<S>(pub Vec<Rule<S>>);
+
+pub struct Lexemes<S>(pub Vec<S>);
 
 pub struct Rule<S> {
     name_op: Option<S>,

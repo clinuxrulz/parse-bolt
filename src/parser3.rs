@@ -106,7 +106,7 @@ impl<S> GrammarNameGen<S> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum RuleOrToken<S> {
     Rule(usize),
     Token(S),
@@ -279,4 +279,15 @@ fn test_combinator_to_grammar() {
     };
     let rules = combinator.generate_grammar();
     println!("{:?}", rules);
+    let table_generator = crate::lr_parser::LrParserTableGenerator::new(
+        crate::lr_parser::Grammar(rules),
+        crate::lr_parser::Lexemes(vec![
+            RuleOrToken::Token('A'),
+            RuleOrToken::Token('B'),
+            RuleOrToken::Token('C'),
+            RuleOrToken::Token('D'),
+        ]),
+    );
+    let table = table_generator.generate_table();
+    println!("{:?}", table);
 }
