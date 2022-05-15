@@ -1,4 +1,5 @@
 use super::TokenStream;
+use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -228,7 +229,18 @@ impl<S> ParserBase<S> {
                     let (part, _) = name_gen.gen_name(parser);
                     parts.push(part);
                 }
-                let rule = crate::lr_parser::Rule::new(Some(name), parts, None);
+                let num_parsers = parsers.len();
+                let rule = crate::lr_parser::Rule::new(
+                    Some(name),
+                    parts,
+                    Some(Rc::new(RefCell::new(move |value_stack: &mut Vec<Box<dyn Any>>| {
+                        let mut result = Vec::new();
+                        for _i in 0..num_parsers {
+                            result.push(value_stack.pop().unwrap());
+                        }
+                        value_stack.push(Box::new(result) as Box<dyn Any>);
+                    })))
+                );
                 rules_out[gap_idx] = rule;
             }
             ParserBase::Choice { parsers } => {
