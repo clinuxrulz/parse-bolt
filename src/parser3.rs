@@ -278,7 +278,9 @@ fn test_combinator_to_grammar() {
         ],
     };
     let rules = combinator.generate_grammar();
+    println!("Rules:");
     println!("{:?}", rules);
+    println!();
     let table_generator = crate::lr_parser::LrParserTableGenerator::new(
         crate::lr_parser::Grammar(rules),
         crate::lr_parser::Lexemes(vec![
@@ -289,5 +291,6 @@ fn test_combinator_to_grammar() {
         ]),
     );
     let table = table_generator.generate_table();
+    println!("Parser Table:");
     println!("{:?}", table);
 }
