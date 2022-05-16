@@ -321,6 +321,10 @@ impl<S> LrParser<S> {
         }
     }
 
+    pub fn get_value_stack_ref(&self) -> &Vec<Box<dyn Any>> {
+        &self.value_stack
+    }
+
     pub fn advance(
         &mut self,
         sym_op: Option<S>,

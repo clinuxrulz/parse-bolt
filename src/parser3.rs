@@ -81,11 +81,11 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         })
     }
 
-    pub fn choice(parsers: Vec<Parser<Err, T, TC, A>>) -> Parser<Err, T, TC, A> {
+    pub fn choice<'a>(parsers: Vec<&'a Parser<Err, T, TC, A>>) -> Parser<Err, T, TC, A> {
         Parser::wrap_base(ParserBase::Choice {
             parsers: parsers
                 .iter()
-                .map(|parser| Rc::clone(&parser.base))
+                .map(|parser| Rc::clone(&(*parser).base))
                 .collect(),
         })
     }
@@ -468,4 +468,28 @@ fn test_combinator_to_grammar() {
     let table = table_generator.generate_table();
     println!("Parser Table:");
     println!("{:?}", table);
+}
+
+#[test]
+fn test_build_parser() {
+    struct Token(char);
+    impl TokenClass for Token {
+        type Result = char;
+        fn token_class(&self) -> Self::Result {
+            return self.0;
+        }
+    }
+    let parser: Parser<String, Token, char, _> =
+        Parser::match_('A')
+            .seq2(&Parser::match_('B'))
+            .seq2(&Parser::choice(vec![
+                &Parser::match_('C'),
+                &Parser::match_('D'),
+            ]));
+    let mut parser_runner = parser.build();
+    let _ = parser_runner.advance(Some(Token('A')));
+    let _ = parser_runner.advance(Some(Token('B')));
+    let _ = parser_runner.advance(Some(Token('C')));
+    let _ = parser_runner.advance(None);
+    println!("{:?}", parser_runner.lr_parser.get_value_stack_ref());
 }
