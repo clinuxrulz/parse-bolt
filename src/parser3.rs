@@ -37,8 +37,13 @@ pub struct ParserRunner<Err, T, TC, A> {
 }
 
 impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
-    pub fn advance(&mut self, token: Option<T>) where T: TokenClass<Result=TC> {
-        todo!();
+    pub fn advance(&mut self, token_op: Option<T>) -> Result<bool, Err> where Err: From<String>, T: TokenClass<Result=TC> + 'static, TC: Clone + PartialEq + Eq + std::hash::Hash {
+        self.lr_parser
+            .advance(
+                token_op.as_ref().map(T::token_class).map(RuleOrToken::Token),
+                token_op.map(|token| Box::new(token) as Box<dyn Any>)
+            )
+            .map_err(Err::from)
     }
 }
 
