@@ -2,6 +2,7 @@ use super::TokenStream;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -16,28 +17,66 @@ pub struct Span {
     pub to: Pos,
 }
 
-pub struct Parser<Err, T, A> {
-    phantom_err: PhantomData<Err>,
-    phantom_a: PhantomData<A>,
-    base: Rc<ParserBase<T>>,
+pub trait TokenClass {
+    type Result;
+    fn token_class(&self) -> Self::Result;
 }
 
-impl<Err, T, A> Parser<Err, T, A> {
-    fn wrap_base(base: ParserBase<T>) -> Parser<Err, T, A> {
+pub struct Parser<Err, T, TC, A> {
+    phantom_err: PhantomData<Err>,
+    phantom_t: PhantomData<T>,
+    phantom_a: PhantomData<A>,
+    base: Rc<ParserBase<TC>>,
+}
+
+pub struct ParserRunner<Err, T, TC, A> {
+    phantom_err: PhantomData<Err>,
+    phantom_t: PhantomData<T>,
+    phantom_a: PhantomData<A>,
+    lr_parser: crate::lr_parser::LrParser<RuleOrToken<TC>>,
+}
+
+impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
+    pub fn advance(&mut self, token: Option<T>) where T: TokenClass<Result=TC> {
+        todo!();
+    }
+}
+
+impl<Err, T, TC, A> Parser<Err, T, TC, A> {
+    fn wrap_base(base: ParserBase<TC>) -> Parser<Err, T, TC, A> {
         Parser {
             phantom_err: PhantomData,
+            phantom_t: PhantomData,
             phantom_a: PhantomData,
             base: Rc::new(base),
         }
     }
 
-    pub fn seq2<B>(&self, parser2: &Parser<Err, T, B>) -> Parser<Err, T, (A, B)> {
+    pub fn build(&self) -> ParserRunner<Err, T, TC, A> where TC: Clone + std::fmt::Debug + PartialEq + Eq + std::hash::Hash {
+        let grammar = self.base.generate_grammar();
+        let lexemes = self.base.find_lexemes().drain(0..).map(RuleOrToken::Token).collect();
+        let lr_parser_tg =
+            crate::lr_parser::LrParserTableGenerator::new(
+                crate::lr_parser::Grammar(grammar),
+                crate::lr_parser::Lexemes(lexemes)
+            );
+        let table = lr_parser_tg.generate_table();
+        let lr_parser = crate::lr_parser::LrParser::new(table);
+        ParserRunner {
+            phantom_err: PhantomData,
+            phantom_t: PhantomData,
+            phantom_a: PhantomData,
+            lr_parser,
+        }
+    }
+
+    pub fn seq2<B>(&self, parser2: &Parser<Err, T, TC, B>) -> Parser<Err, T, TC, (A, B)> {
         Parser::wrap_base(ParserBase::Seq {
             parsers: vec![Rc::clone(&self.base), Rc::clone(&parser2.base)],
         })
     }
 
-    pub fn choice(parsers: Vec<Parser<Err, T, A>>) -> Parser<Err, T, A> {
+    pub fn choice(parsers: Vec<Parser<Err, T, TC, A>>) -> Parser<Err, T, TC, A> {
         Parser::wrap_base(ParserBase::Choice {
             parsers: parsers
                 .iter()
@@ -47,14 +86,14 @@ impl<Err, T, A> Parser<Err, T, A> {
     }
 }
 
-impl<Err, T> Parser<Err, T, T> {
-    pub fn match_(t: T) -> Parser<Err, T, T> {
-        Parser::wrap_base(ParserBase::Match { sym: t })
+impl<Err, T, TC> Parser<Err, T, TC, T> {
+    pub fn match_(sym: TC) -> Parser<Err, T, TC, T> {
+        Parser::wrap_base(ParserBase::Match { sym, })
     }
 }
 
-impl<Err, T> Parser<Err, T, ()> {
-    pub fn empty() -> Parser<Err, T, ()> {
+impl<Err, T, TC> Parser<Err, T, TC, ()> {
+    pub fn empty() -> Parser<Err, T, TC, ()> {
         Parser::wrap_base(ParserBase::Seq {
             parsers: Vec::new(),
         })
@@ -364,6 +403,33 @@ impl<S> ParserBase<S> {
                 );
             }
         }
+    }
+
+    fn find_lexemes(self: &Rc<ParserBase<S>>) -> Vec<S> where S: Clone + PartialEq + Eq + std::hash::Hash {
+        let mut result: HashSet<S> = HashSet::new();
+        let mut stack = Vec::new();
+        stack.push(Rc::clone(self));
+        while let Some(at) = stack.pop() {
+            match &*at {
+                ParserBase::Match { sym, } => {
+                    result.insert(S::clone(sym));
+                }
+                ParserBase::Seq { parsers } => {
+                    for parser in parsers.iter().rev() {
+                        stack.push(Rc::clone(parser));
+                    }
+                },
+                ParserBase::Choice { parsers } => {
+                    for parser in parsers.iter().rev() {
+                        stack.push(Rc::clone(parser));
+                    }
+                },
+                ParserBase::AndThenEffect { parser, effect: _ } => {
+                    stack.push(Rc::clone(parser));
+                }
+            }
+        }
+        return result.drain().collect();
     }
 }
 
