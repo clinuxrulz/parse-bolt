@@ -149,7 +149,7 @@ impl<S> GrammarNameGen<S> {
             ParserBase::Match { sym } => {
                 return (RuleOrToken::Token(S::clone(sym)), false);
             }
-            ParserBase::Seq { parsers } => {
+            ParserBase::Seq { parsers: _ } => {
                 if let Some(id) = self.grammar_to_name.get(parser) {
                     return (RuleOrToken::Rule(*id), false);
                 }
@@ -158,7 +158,7 @@ impl<S> GrammarNameGen<S> {
                 self.grammar_to_name.insert(ParserBase::clone(parser), id);
                 return (RuleOrToken::Rule(id), true);
             }
-            ParserBase::Choice { parsers } => {
+            ParserBase::Choice { parsers: _ } => {
                 if let Some(id) = self.grammar_to_name.get(parser) {
                     return (RuleOrToken::Rule(*id), false);
                 }
@@ -167,7 +167,7 @@ impl<S> GrammarNameGen<S> {
                 self.grammar_to_name.insert(ParserBase::clone(parser), id);
                 return (RuleOrToken::Rule(id), true);
             }
-            ParserBase::AndThenEffect { parser, effect } => {
+            ParserBase::AndThenEffect { parser: _, effect: _ } => {
                 if let Some(id) = self.grammar_to_name.get(parser) {
                     return (RuleOrToken::Rule(*id), false);
                 }
