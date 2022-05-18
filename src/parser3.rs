@@ -362,16 +362,7 @@ impl<S> ParserBase<S> {
                 let rule = crate::lr_parser::Rule::new(
                     Some(name),
                     parts,
-                    Some(Rc::new(RefCell::new(
-                        move |value_stack: &mut Vec<Box<dyn Any>>| {
-                            let mut result = Vec::new();
-                            for _i in 0..num_parsers {
-                                result.push(value_stack.pop().unwrap());
-                            }
-                            result.reverse();
-                            value_stack.push(Box::new(result) as Box<dyn Any>);
-                        },
-                    ))),
+                    None, // <-- effect is none because we are gonna leave all results on the stack for the AndThenEffect of from Parser::seq to manage.
                 );
                 rules_out[gap_idx] = rule;
             }
