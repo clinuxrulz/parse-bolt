@@ -29,6 +29,17 @@ pub struct Parser<Err, T, TC, A> {
     base: Rc<ParserBase<TC>>,
 }
 
+impl<Err, T, TC, A> Clone for Parser<Err, T, TC, A> {
+    fn clone(&self) -> Self {
+        Parser {
+            phantom_err: PhantomData,
+            phantom_t: PhantomData,
+            phantom_a: PhantomData,
+            base: Rc::clone(&self.base),
+        }
+    }
+}
+
 pub struct ParserRunner<Err, T, TC, A> {
     phantom_err: PhantomData<Err>,
     phantom_t: PhantomData<T>,
@@ -38,11 +49,19 @@ pub struct ParserRunner<Err, T, TC, A> {
 }
 
 impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
-    pub fn advance(&mut self, token_op: Option<T>) -> Result<bool, Err> where Err: From<String>, T: TokenClass<Result=TC> + 'static, TC: Clone + PartialEq + Eq + std::hash::Hash {
+    pub fn advance(&mut self, token_op: Option<T>) -> Result<bool, Err>
+    where
+        Err: From<String>,
+        T: TokenClass<Result = TC> + 'static,
+        TC: Clone + PartialEq + Eq + std::hash::Hash,
+    {
         self.lr_parser
             .advance(
-                token_op.as_ref().map(T::token_class).map(RuleOrToken::Token),
-                token_op.map(|token| Box::new(token) as Box<dyn Any>)
+                token_op
+                    .as_ref()
+                    .map(T::token_class)
+                    .map(RuleOrToken::Token),
+                token_op.map(|token| Box::new(token) as Box<dyn Any>),
             )
             .map_err(Err::from)
     }
@@ -51,11 +70,21 @@ impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
         self.lr_parser.is_finished()
     }
 
-    pub fn get_result(&mut self) -> A where A: 'static {
+    pub fn get_result(&mut self) -> A
+    where
+        A: 'static,
+    {
         if self.result_fetched {
             panic!("Result already extracted.");
         }
-        let result: Box<A> = self.lr_parser.get_value_stack_mut().pop().unwrap().downcast().ok().unwrap();
+        let result: Box<A> = self
+            .lr_parser
+            .get_value_stack_mut()
+            .pop()
+            .unwrap()
+            .downcast()
+            .ok()
+            .unwrap();
         self.result_fetched = true;
         return *result;
     }
@@ -63,22 +92,33 @@ impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
 
 impl<Err, T, TC, A> Parser<Err, T, TC, A> {
     fn wrap_base(base: ParserBase<TC>) -> Parser<Err, T, TC, A> {
+        Parser::wrap_base_(Rc::new(base))
+    }
+
+    fn wrap_base_(base: Rc<ParserBase<TC>>) -> Parser<Err, T, TC, A> {
         Parser {
             phantom_err: PhantomData,
             phantom_t: PhantomData,
             phantom_a: PhantomData,
-            base: Rc::new(base),
+            base,
         }
     }
 
-    pub fn compile(&self) -> ParserRunner<Err, T, TC, A> where TC: Clone + std::fmt::Debug + PartialEq + Eq + std::hash::Hash {
+    pub fn compile(&self) -> ParserRunner<Err, T, TC, A>
+    where
+        TC: Clone + std::fmt::Debug + PartialEq + Eq + std::hash::Hash,
+    {
         let grammar = self.base.generate_grammar();
-        let lexemes = self.base.find_lexemes().drain(0..).map(RuleOrToken::Token).collect();
-        let lr_parser_tg =
-            crate::lr_parser::LrParserTableGenerator::new(
-                crate::lr_parser::Grammar(grammar),
-                crate::lr_parser::Lexemes(lexemes)
-            );
+        let lexemes = self
+            .base
+            .find_lexemes()
+            .drain(0..)
+            .map(RuleOrToken::Token)
+            .collect();
+        let lr_parser_tg = crate::lr_parser::LrParserTableGenerator::new(
+            crate::lr_parser::Grammar(grammar),
+            crate::lr_parser::Lexemes(lexemes),
+        );
         let table = lr_parser_tg.generate_table();
         let lr_parser = crate::lr_parser::LrParser::new(table);
         ParserRunner {
@@ -90,31 +130,40 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         }
     }
 
-    pub fn map<B: 'static, F: FnMut(A)->B + 'static>(&self, mut f: F) -> Parser<Err, T, TC, B> where A: 'static {
-        Parser::wrap_base(
-            ParserBase::AndThenEffect {
-                parser: Rc::clone(&self.base),
-                effect: Rc::new(RefCell::new(move |stack: &mut Vec<Box<dyn Any>>| {
-                    let a: Box<A> = stack.pop().unwrap().downcast().ok().unwrap();
-                    stack.push(Box::new(f(*a)));
-                }))
-            }
-        )
+    pub fn map<B: 'static, F: FnMut(A) -> B + 'static>(&self, mut f: F) -> Parser<Err, T, TC, B>
+    where
+        A: 'static,
+    {
+        Parser::wrap_base(ParserBase::AndThenEffect {
+            parser: Rc::clone(&self.base),
+            effect: Rc::new(RefCell::new(move |stack: &mut Vec<Box<dyn Any>>| {
+                let a: Box<A> = stack.pop().unwrap().downcast().ok().unwrap();
+                stack.push(Box::new(f(*a)));
+            })),
+        })
     }
 
-    pub fn seq2<B: 'static>(&self, parser2: &Parser<Err, T, TC, B>) -> Parser<Err, T, TC, (A, B)> where A: 'static {
-        Parser::wrap_base(
-            ParserBase::AndThenEffect {
-                parser: Rc::new(ParserBase::Seq {
-                    parsers: vec![Rc::clone(&self.base), Rc::clone(&parser2.base)],
-                }),
-                effect: Rc::new(RefCell::new(|stack: &mut Vec<Box<dyn Any>>| {
-                    let rhs: Box<B> = stack.pop().unwrap().downcast().ok().unwrap();
-                    let lhs: Box<A> = stack.pop().unwrap().downcast().ok().unwrap();
-                    stack.push(Box::new((*lhs, *rhs)));
-                }))
-            }
-        )
+    pub fn map_to<B: Clone + 'static>(&self, b: B) -> Parser<Err, T, TC, B>
+    where
+        A: 'static,
+    {
+        self.map(move |_| b.clone())
+    }
+
+    pub fn seq2<B: 'static>(&self, parser2: &Parser<Err, T, TC, B>) -> Parser<Err, T, TC, (A, B)>
+    where
+        A: 'static,
+    {
+        Parser::wrap_base(ParserBase::AndThenEffect {
+            parser: Rc::new(ParserBase::Seq {
+                parsers: vec![Rc::clone(&self.base), Rc::clone(&parser2.base)],
+            }),
+            effect: Rc::new(RefCell::new(|stack: &mut Vec<Box<dyn Any>>| {
+                let rhs: Box<B> = stack.pop().unwrap().downcast().ok().unwrap();
+                let lhs: Box<A> = stack.pop().unwrap().downcast().ok().unwrap();
+                stack.push(Box::new((*lhs, *rhs)));
+            })),
+        })
     }
 
     pub fn choice<'a>(parsers: Vec<&'a Parser<Err, T, TC, A>>) -> Parser<Err, T, TC, A> {
@@ -125,11 +174,66 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
                 .collect(),
         })
     }
+
+    pub fn many1(&self) -> Parser<Err, T, TC, Vec<A>>
+    where
+        Err: 'static,
+        T: 'static,
+        TC: 'static,
+        A: 'static,
+    {
+        return self.seq2(&self.many0_rev()).map(|(x, mut xs)| {
+            xs.push(x);
+            xs.reverse();
+            xs
+        });
+    }
+
+    pub fn many0(&self) -> Parser<Err, T, TC, Vec<A>>
+    where
+        Err: 'static,
+        T: 'static,
+        TC: 'static,
+        A: 'static,
+    {
+        self.many0_rev().map(|mut xs| {
+            xs.reverse();
+            xs
+        })
+    }
+
+    fn many0_rev(&self) -> Parser<Err, T, TC, Vec<A>>
+    where
+        Err: 'static,
+        T: 'static,
+        TC: 'static,
+        A: 'static,
+    {
+        let self_ = Self::clone(self);
+        Parser::fix_point(move |result: &Parser<Err, T, TC, Vec<A>>| {
+            Parser::choice(vec![
+                &Parser::empty().map(|_| Vec::new()),
+                &self_.seq2(result).map(|(x, mut xs)| {
+                    xs.push(x);
+                    xs
+                }),
+            ])
+        })
+    }
+
+    pub fn fix_point<Fix: FnMut(&Parser<Err, T, TC, A>) -> Parser<Err, T, TC, A> + 'static>(
+        mut fix: Fix,
+    ) -> Parser<Err, T, TC, A> {
+        Parser::wrap_base(ParserBase::FixPoint(Rc::new(RefCell::new(move |base| {
+            let parser: Parser<Err, T, TC, A> = Parser::wrap_base_(base);
+            return fix(&parser).base;
+        }))))
+    }
 }
 
 impl<Err, T, TC> Parser<Err, T, TC, T> {
     pub fn match_(sym: TC) -> Parser<Err, T, TC, T> {
-        Parser::wrap_base(ParserBase::Match { sym, })
+        Parser::wrap_base(ParserBase::Match { sym })
     }
 }
 
@@ -156,6 +260,12 @@ impl<S> GrammarNameGen<S> {
 }
 
 impl<S> GrammarNameGen<S> {
+    fn gen_fresh_id(&mut self) -> usize {
+        let id = self.next_id;
+        self.next_id += 1;
+        return id;
+    }
+
     fn gen_name(&mut self, parser: &ParserBase<S>) -> (RuleOrToken<S>, bool)
     where
         S: Clone + PartialEq + Eq + std::hash::Hash,
@@ -182,7 +292,22 @@ impl<S> GrammarNameGen<S> {
                 self.grammar_to_name.insert(ParserBase::clone(parser), id);
                 return (RuleOrToken::Rule(id), true);
             }
-            ParserBase::AndThenEffect { parser: _, effect: _ } => {
+            ParserBase::AndThenEffect {
+                parser: _,
+                effect: _,
+            } => {
+                if let Some(id) = self.grammar_to_name.get(parser) {
+                    return (RuleOrToken::Rule(*id), false);
+                }
+                let id = self.next_id;
+                self.next_id += 1;
+                self.grammar_to_name.insert(ParserBase::clone(parser), id);
+                return (RuleOrToken::Rule(id), true);
+            }
+            ParserBase::Reference { name } => {
+                return (RuleOrToken::Rule(*name), false);
+            }
+            ParserBase::FixPoint(_) => {
                 if let Some(id) = self.grammar_to_name.get(parser) {
                     return (RuleOrToken::Rule(*id), false);
                 }
@@ -215,6 +340,10 @@ enum ParserBase<S> {
         parser: Rc<ParserBase<S>>,
         effect: Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>,
     },
+    Reference {
+        name: usize,
+    },
+    FixPoint(Rc<RefCell<dyn FnMut(Rc<ParserBase<S>>) -> Rc<ParserBase<S>>>>),
 }
 
 impl<S: PartialEq> PartialEq for ParserBase<S> {
@@ -240,6 +369,16 @@ impl<S: PartialEq> PartialEq for ParserBase<S> {
                 let l_ptr: *const RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)> = &**l_effect;
                 let r_ptr: *const RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)> = &**r_effect;
                 *l_parser == *r_parser && l_ptr == r_ptr
+            }
+            (Self::Reference { name: l_name }, Self::Reference { name: r_name }) => {
+                *l_name == *r_name
+            }
+            (Self::FixPoint(l_fix), Self::FixPoint(r_fix)) => {
+                let l_ptr: *const RefCell<dyn FnMut(Rc<ParserBase<S>>) -> Rc<ParserBase<S>>> =
+                    &**l_fix;
+                let r_ptr: *const RefCell<dyn FnMut(Rc<ParserBase<S>>) -> Rc<ParserBase<S>>> =
+                    &**r_fix;
+                l_ptr == r_ptr
             }
             _ => false,
         }
@@ -269,73 +408,17 @@ impl<S: PartialEq + Eq + std::hash::Hash> std::hash::Hash for ParserBase<S> {
                 let ptr: *const RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)> = &**effect;
                 ptr.hash(state);
             }
-        }
-        core::mem::discriminant(self).hash(state);
-    }
-}
-
-impl<S> ParserBase<S> {
-    pub fn optimise(&mut self)
-    where
-        S: Clone,
-    {
-        fn optimise_<S: Clone>(a: ParserBase<S>) -> ParserBase<S> {
-            match a {
-                ParserBase::Match { sym: _ } => {
-                    return a;
-                }
-                ParserBase::Seq { parsers } => {
-                    let parsers2: Vec<ParserBase<S>> = parsers
-                        .iter()
-                        .map(|parser| optimise_(ParserBase::clone(&**parser)))
-                        .collect();
-                    let mut parsers3 = Vec::new();
-                    for parser in parsers2 {
-                        match parser {
-                            ParserBase::Seq { parsers: parsers4 } => {
-                                for parser2 in parsers4 {
-                                    parsers3.push(parser2);
-                                }
-                            }
-                            _ => {
-                                parsers3.push(Rc::new(parser));
-                            }
-                        }
-                    }
-                    return ParserBase::Seq { parsers: parsers3 };
-                }
-                ParserBase::Choice { parsers } => {
-                    let parsers2: Vec<ParserBase<S>> = parsers
-                        .iter()
-                        .map(|parser| optimise_(ParserBase::clone(&**parser)))
-                        .collect();
-                    let mut parsers3 = Vec::new();
-                    for parser in parsers2 {
-                        match parser {
-                            ParserBase::Choice { parsers: parsers4 } => {
-                                for parser2 in parsers4 {
-                                    parsers3.push(parser2);
-                                }
-                            }
-                            _ => {
-                                parsers3.push(Rc::new(parser));
-                            }
-                        }
-                    }
-                    return ParserBase::Choice { parsers: parsers3 };
-                }
-                ParserBase::AndThenEffect {
-                    parser: _,
-                    effect: _,
-                } => {
-                    return a;
-                }
+            Self::Reference { name } => {
+                state.write_usize(4);
+                name.hash(state);
+            }
+            Self::FixPoint(fix) => {
+                state.write_usize(5);
+                let ptr: *const RefCell<dyn FnMut(Rc<ParserBase<S>>) -> Rc<ParserBase<S>>> = &**fix;
+                ptr.hash(state);
             }
         }
-        let mut tmp: ParserBase<S> = ParserBase::Seq { parsers: vec![] };
-        std::mem::swap(&mut tmp, self);
-        tmp = optimise_(tmp);
-        *self = tmp;
+        core::mem::discriminant(self).hash(state);
     }
 }
 
@@ -353,6 +436,8 @@ impl<S: Clone> Clone for ParserBase<S> {
                 parser: Rc::clone(parser),
                 effect: Rc::clone(effect),
             },
+            ParserBase::Reference { name } => ParserBase::Reference { name: *name },
+            ParserBase::FixPoint(fix) => ParserBase::FixPoint(Rc::clone(fix)),
         }
     }
 }
@@ -433,30 +518,56 @@ impl<S> ParserBase<S> {
                     Some(Rc::clone(effect)),
                 );
             }
+            ParserBase::Reference { name } => {
+                return;
+            }
+            ParserBase::FixPoint(fix) => {
+                let (name, is_new) = name_gen.gen_name(self);
+                if !is_new {
+                    return;
+                }
+                let parser = fix.borrow_mut()(Rc::new(ParserBase::Reference {
+                    name: name_gen.gen_fresh_id(),
+                }));
+                let gap_idx = rules_out.len();
+                let gap = crate::lr_parser::Rule::new(None, Vec::new(), None);
+                rules_out.push(gap);
+                parser.generate_grammar_(name_gen, rules_out);
+                let (inner_name, _) = name_gen.gen_name(&*parser);
+                rules_out[gap_idx] =
+                    crate::lr_parser::Rule::new(Some(name), vec![inner_name], None);
+            }
         }
     }
 
-    fn find_lexemes(self: &Rc<ParserBase<S>>) -> Vec<S> where S: Clone + PartialEq + Eq + std::hash::Hash {
+    fn find_lexemes(self: &Rc<ParserBase<S>>) -> Vec<S>
+    where
+        S: Clone + PartialEq + Eq + std::hash::Hash,
+    {
         let mut result: HashSet<S> = HashSet::new();
         let mut stack = Vec::new();
         stack.push(Rc::clone(self));
         while let Some(at) = stack.pop() {
             match &*at {
-                ParserBase::Match { sym, } => {
+                ParserBase::Match { sym } => {
                     result.insert(S::clone(sym));
                 }
                 ParserBase::Seq { parsers } => {
                     for parser in parsers.iter().rev() {
                         stack.push(Rc::clone(parser));
                     }
-                },
+                }
                 ParserBase::Choice { parsers } => {
                     for parser in parsers.iter().rev() {
                         stack.push(Rc::clone(parser));
                     }
-                },
+                }
                 ParserBase::AndThenEffect { parser, effect: _ } => {
                     stack.push(Rc::clone(parser));
+                }
+                ParserBase::Reference { name: _ } => {}
+                ParserBase::FixPoint(fix) => {
+                    stack.push(fix.borrow_mut()(Rc::new(ParserBase::Reference { name: 0 })));
                 }
             }
         }
@@ -506,13 +617,12 @@ fn test_build_parser() {
             return self.0;
         }
     }
-    let parser: Parser<String, Token, char, _> =
-        Parser::match_('A')
-            .seq2(&Parser::match_('B'))
-            .seq2(&Parser::choice(vec![
-                &Parser::match_('C'),
-                &Parser::match_('D'),
-            ]));
+    let parser: Parser<String, Token, char, _> = Parser::match_('A')
+        .seq2(&Parser::match_('B'))
+        .seq2(&Parser::choice(vec![
+            &Parser::match_('C'),
+            &Parser::match_('D'),
+        ]));
     let mut parser_runner = parser.compile();
     let _ = parser_runner.advance(Some(Token('A')));
     let _ = parser_runner.advance(Some(Token('B')));
