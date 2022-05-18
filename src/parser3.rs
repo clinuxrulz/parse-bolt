@@ -75,10 +75,31 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         }
     }
 
-    pub fn seq2<B>(&self, parser2: &Parser<Err, T, TC, B>) -> Parser<Err, T, TC, (A, B)> {
-        Parser::wrap_base(ParserBase::Seq {
-            parsers: vec![Rc::clone(&self.base), Rc::clone(&parser2.base)],
-        })
+    pub fn map<B: 'static, F: FnMut(A)->B + 'static>(&self, mut f: F) -> Parser<Err, T, TC, B> where A: 'static {
+        Parser::wrap_base(
+            ParserBase::AndThenEffect {
+                parser: Rc::clone(&self.base),
+                effect: Rc::new(RefCell::new(move |stack: &mut Vec<Box<dyn Any>>| {
+                    let a: Box<A> = stack.pop().unwrap().downcast().ok().unwrap();
+                    stack.push(Box::new(f(*a)));
+                }))
+            }
+        )
+    }
+
+    pub fn seq2<B: 'static>(&self, parser2: &Parser<Err, T, TC, B>) -> Parser<Err, T, TC, (A, B)> where A: 'static {
+        Parser::wrap_base(
+            ParserBase::AndThenEffect {
+                parser: Rc::new(ParserBase::Seq {
+                    parsers: vec![Rc::clone(&self.base), Rc::clone(&parser2.base)],
+                }),
+                effect: Rc::new(RefCell::new(|stack: &mut Vec<Box<dyn Any>>| {
+                    let rhs: Box<B> = stack.pop().unwrap().downcast().ok().unwrap();
+                    let lhs: Box<A> = stack.pop().unwrap().downcast().ok().unwrap();
+                    stack.push(Box::new((*lhs, *rhs)));
+                }))
+            }
+        )
     }
 
     pub fn choice<'a>(parsers: Vec<&'a Parser<Err, T, TC, A>>) -> Parser<Err, T, TC, A> {
