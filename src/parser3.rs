@@ -358,7 +358,6 @@ impl<S> ParserBase<S> {
                     let (part, _) = name_gen.gen_name(parser);
                     parts.push(part);
                 }
-                let num_parsers = parsers.len();
                 let rule = crate::lr_parser::Rule::new(
                     Some(name),
                     parts,
