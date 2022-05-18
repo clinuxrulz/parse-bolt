@@ -655,3 +655,27 @@ fn test_build_parser() {
         println!("more input required.");
     }
 }
+
+#[test]
+fn test_parser_many0() {
+    #[derive(Debug)]
+    struct Token(char);
+    impl TokenClass for Token {
+        type Result = char;
+        fn token_class(&self) -> Self::Result {
+            return self.0;
+        }
+    }
+    let parser: Parser<String, Token, char, Vec<Token>> = Parser::choice(vec![&Parser::match_('A'), &Parser::match_('B'), &Parser::match_('C')]).many0();
+    let mut parser_runner = parser.compile();
+    let _ = parser_runner.advance(Some(Token('A')));
+    let _ = parser_runner.advance(Some(Token('B')));
+    let _ = parser_runner.advance(Some(Token('C')));
+    let _ = parser_runner.advance(Some(Token('A')));
+    let _ = parser_runner.advance(None);
+    if parser_runner.is_finished() {
+        println!("{:?}", parser_runner.get_result());
+    } else {
+        println!("more input required.");
+    }
+}
