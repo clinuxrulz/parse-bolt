@@ -249,7 +249,7 @@ impl<S> GrammarNameGen<S> {
         return id;
     }
 
-    fn gen_name(&mut self, parser: &ParserBase<S>) -> (RuleOrToken<S>, bool)
+    fn gen_name(&mut self, parser: &ParserBase<S>, fix_point_map: &mut HashMap<ParserReferenceName,RuleOrToken<S>>) -> (RuleOrToken<S>, bool)
     where
         S: Clone + PartialEq + Eq + std::hash::Hash,
     {
@@ -288,13 +288,7 @@ impl<S> GrammarNameGen<S> {
                 return (RuleOrToken::Rule(id), true);
             }
             ParserBase::Reference { name } => {
-                if let Some(id) = self.grammar_to_name.get(parser) {
-                    return (RuleOrToken::Rule(*id), false);
-                }
-                let id = self.next_id;
-                self.next_id += 1;
-                self.grammar_to_name.insert(ParserBase::clone(parser), id);
-                return (RuleOrToken::Rule(id), true);
+                return (RuleOrToken::clone(fix_point_map.get(name).unwrap()), false);
             }
             ParserBase::FixPoint(_, _) => {
                 if let Some(id) = self.grammar_to_name.get(parser) {
@@ -474,8 +468,9 @@ impl<S> ParserBase<S> {
         let mut rules = Vec::new();
         let gap = crate::lr_parser::Rule::new(None, Vec::new(), None);
         rules.push(gap);
-        self.generate_grammar_(&mut name_gen, &mut rules);
-        rules[0] = crate::lr_parser::Rule::new(None, vec![name_gen.gen_name(self).0], None);
+        let mut fix_point_map = HashMap::new();
+        self.generate_grammar_(&mut name_gen, &mut rules, &mut fix_point_map);
+        rules[0] = crate::lr_parser::Rule::new(None, vec![name_gen.gen_name(self, &mut fix_point_map).0], None);
         rules
     }
 
@@ -483,13 +478,14 @@ impl<S> ParserBase<S> {
         &self,
         name_gen: &mut GrammarNameGen<S>,
         rules_out: &mut Vec<crate::lr_parser::Rule<RuleOrToken<S>>>,
+        fix_point_map: &mut HashMap<ParserReferenceName,RuleOrToken<S>>,
     ) where
         S: Clone + PartialEq + Eq + std::hash::Hash,
     {
         match self {
             ParserBase::Match { sym: _ } => {}
             ParserBase::Seq { parsers } => {
-                let (name, is_new) = name_gen.gen_name(self);
+                let (name, is_new) = name_gen.gen_name(self, fix_point_map);
                 if !is_new {
                     return;
                 }
@@ -498,8 +494,8 @@ impl<S> ParserBase<S> {
                 rules_out.push(gap);
                 let mut parts = Vec::new();
                 for parser in parsers {
-                    parser.generate_grammar_(name_gen, rules_out);
-                    let (part, _) = name_gen.gen_name(parser);
+                    parser.generate_grammar_(name_gen, rules_out, fix_point_map);
+                    let (part, _) = name_gen.gen_name(parser, fix_point_map);
                     parts.push(part);
                 }
                 let rule = crate::lr_parser::Rule::new(
@@ -510,13 +506,13 @@ impl<S> ParserBase<S> {
                 rules_out[gap_idx] = rule;
             }
             ParserBase::Choice { parsers } => {
-                let (name, is_new) = name_gen.gen_name(self);
+                let (name, is_new) = name_gen.gen_name(self, fix_point_map);
                 if !is_new {
                     return;
                 }
                 for parser in parsers {
-                    parser.generate_grammar_(name_gen, rules_out);
-                    let (choice_name, _) = name_gen.gen_name(parser);
+                    parser.generate_grammar_(name_gen, rules_out, fix_point_map);
+                    let (choice_name, _) = name_gen.gen_name(parser, fix_point_map);
                     let rule = crate::lr_parser::Rule::new(
                         Some(RuleOrToken::clone(&name)),
                         vec![choice_name],
@@ -526,15 +522,15 @@ impl<S> ParserBase<S> {
                 }
             }
             ParserBase::AndThenEffect { parser, effect } => {
-                let (name, is_new) = name_gen.gen_name(self);
+                let (name, is_new) = name_gen.gen_name(self, fix_point_map);
                 if !is_new {
                     return;
                 }
                 let gap_idx = rules_out.len();
                 let gap = crate::lr_parser::Rule::new(None, Vec::new(), None);
                 rules_out.push(gap);
-                parser.generate_grammar_(name_gen, rules_out);
-                let (inner_name, _) = name_gen.gen_name(parser);
+                parser.generate_grammar_(name_gen, rules_out, fix_point_map);
+                let (inner_name, _) = name_gen.gen_name(parser, fix_point_map);
                 rules_out[gap_idx] = crate::lr_parser::Rule::new(
                     Some(name),
                     vec![inner_name],
@@ -544,17 +540,17 @@ impl<S> ParserBase<S> {
             ParserBase::Reference { name } => {
                 return;
             }
-            ParserBase::FixPoint(name, parser) => {
-                let (name, is_new) = name_gen.gen_name(self);
+            ParserBase::FixPoint(ref_name, parser) => {
+                let (name, is_new) = name_gen.gen_name(self, fix_point_map);
                 if !is_new {
                     return;
                 }
-                // TODO: make parser reference of name the the parser passed to FixPoint
+                fix_point_map.insert(ParserReferenceName::clone(ref_name), RuleOrToken::clone(&name));
                 let gap_idx = rules_out.len();
                 let gap = crate::lr_parser::Rule::new(None, Vec::new(), None);
                 rules_out.push(gap);
-                parser.generate_grammar_(name_gen, rules_out);
-                let (inner_name, _) = name_gen.gen_name(&*parser);
+                parser.generate_grammar_(name_gen, rules_out, fix_point_map);
+                let (inner_name, _) = name_gen.gen_name(&*parser, fix_point_map);
                 rules_out[gap_idx] =
                     crate::lr_parser::Rule::new(Some(name), vec![inner_name], None);
             }
@@ -668,6 +664,7 @@ fn test_parser_many0() {
     }
     let parser: Parser<String, Token, char, Vec<Token>> = Parser::choice(vec![&Parser::match_('A'), &Parser::match_('B'), &Parser::match_('C')]).many0();
     let mut parser_runner = parser.compile();
+    println!("{:#?}", parser_runner.lr_parser);
     let _ = parser_runner.advance(Some(Token('A')));
     let _ = parser_runner.advance(Some(Token('B')));
     let _ = parser_runner.advance(Some(Token('C')));
