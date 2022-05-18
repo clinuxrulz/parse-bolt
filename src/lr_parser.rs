@@ -321,8 +321,12 @@ impl<S> LrParser<S> {
         }
     }
 
-    pub fn get_value_stack_ref(&self) -> &Vec<Box<dyn Any>> {
-        &self.value_stack
+    pub fn get_value_stack_mut(&mut self) -> &mut Vec<Box<dyn Any>> {
+        &mut self.value_stack
+    }
+
+    pub fn is_finished(&self) -> bool {
+        return self.stack.is_empty() && !self.value_stack.is_empty();
     }
 
     pub fn advance(
@@ -395,7 +399,9 @@ impl<S> LrParser<S> {
                     effect.borrow_mut()(&mut self.value_stack);
                 }
                 if rule_name_op.is_none() {
-                    break;
+                    // Finished
+                    self.stack.pop();
+                    return Ok(true);
                 }
                 state_idx = self.stack[self.stack.len() - 1];
                 state = &self.table.states[state_idx];

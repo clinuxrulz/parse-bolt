@@ -34,6 +34,7 @@ pub struct ParserRunner<Err, T, TC, A> {
     phantom_t: PhantomData<T>,
     phantom_a: PhantomData<A>,
     lr_parser: crate::lr_parser::LrParser<RuleOrToken<TC>>,
+    result_fetched: bool,
 }
 
 impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
@@ -44,6 +45,19 @@ impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
                 token_op.map(|token| Box::new(token) as Box<dyn Any>)
             )
             .map_err(Err::from)
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.lr_parser.is_finished()
+    }
+
+    pub fn get_result(&mut self) -> A where A: 'static {
+        if self.result_fetched {
+            panic!("Result already extracted.");
+        }
+        let result: Box<A> = self.lr_parser.get_value_stack_mut().pop().unwrap().downcast().ok().unwrap();
+        self.result_fetched = true;
+        return *result;
     }
 }
 
@@ -57,7 +71,7 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         }
     }
 
-    pub fn build(&self) -> ParserRunner<Err, T, TC, A> where TC: Clone + std::fmt::Debug + PartialEq + Eq + std::hash::Hash {
+    pub fn compile(&self) -> ParserRunner<Err, T, TC, A> where TC: Clone + std::fmt::Debug + PartialEq + Eq + std::hash::Hash {
         let grammar = self.base.generate_grammar();
         let lexemes = self.base.find_lexemes().drain(0..).map(RuleOrToken::Token).collect();
         let lr_parser_tg =
@@ -72,6 +86,7 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
             phantom_t: PhantomData,
             phantom_a: PhantomData,
             lr_parser,
+            result_fetched: false,
         }
     }
 
@@ -483,6 +498,7 @@ fn test_combinator_to_grammar() {
 
 #[test]
 fn test_build_parser() {
+    #[derive(Debug)]
     struct Token(char);
     impl TokenClass for Token {
         type Result = char;
@@ -497,10 +513,14 @@ fn test_build_parser() {
                 &Parser::match_('C'),
                 &Parser::match_('D'),
             ]));
-    let mut parser_runner = parser.build();
+    let mut parser_runner = parser.compile();
     let _ = parser_runner.advance(Some(Token('A')));
     let _ = parser_runner.advance(Some(Token('B')));
     let _ = parser_runner.advance(Some(Token('C')));
     let _ = parser_runner.advance(None);
-    println!("{:?}", parser_runner.lr_parser.get_value_stack_ref());
+    if parser_runner.is_finished() {
+        println!("{:?}", parser_runner.get_result());
+    } else {
+        println!("more input required.");
+    }
 }
