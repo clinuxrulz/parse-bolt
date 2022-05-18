@@ -182,9 +182,8 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         TC: 'static,
         A: 'static,
     {
-        return self.seq2(&self.many0_rev()).map(|(x, mut xs)| {
+        return self.many0().seq2(self).map(|(mut xs, x)| {
             xs.push(x);
-            xs.reverse();
             xs
         });
     }
@@ -196,24 +195,10 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         TC: 'static,
         A: 'static,
     {
-        self.many0_rev().map(|mut xs| {
-            xs.reverse();
-            xs
-        })
-    }
-
-    fn many0_rev(&self) -> Parser<Err, T, TC, Vec<A>>
-    where
-        Err: 'static,
-        T: 'static,
-        TC: 'static,
-        A: 'static,
-    {
-        let self_ = Self::clone(self);
-        Parser::fix_point(move |result: &Parser<Err, T, TC, Vec<A>>| {
+        Parser::fix_point(|result: &Parser<Err, T, TC, Vec<A>>| {
             Parser::choice(vec![
                 &Parser::empty().map(|_| Vec::new()),
-                &self_.seq2(result).map(|(x, mut xs)| {
+                &result.seq2(self).map(|(mut xs, x)| {
                     xs.push(x);
                     xs
                 }),
@@ -221,8 +206,8 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         })
     }
 
-    pub fn fix_point<Fix: FnOnce(&Parser<Err, T, TC, A>) -> Parser<Err, T, TC, A> + 'static>(
-        mut fix: Fix,
+    pub fn fix_point<Fix: FnOnce(&Parser<Err, T, TC, A>) -> Parser<Err, T, TC, A>>(
+        fix: Fix,
     ) -> Parser<Err, T, TC, A> {
         let ref_name = ParserReferenceName::new();
         Parser::wrap_base(ParserBase::FixPoint(ref_name.clone(), fix(&Parser::wrap_base(ParserBase::Reference { name: ref_name })).base))
