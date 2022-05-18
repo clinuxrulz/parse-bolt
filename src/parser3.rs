@@ -221,13 +221,11 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         })
     }
 
-    pub fn fix_point<Fix: FnMut(&Parser<Err, T, TC, A>) -> Parser<Err, T, TC, A> + 'static>(
+    pub fn fix_point<Fix: FnOnce(&Parser<Err, T, TC, A>) -> Parser<Err, T, TC, A> + 'static>(
         mut fix: Fix,
     ) -> Parser<Err, T, TC, A> {
-        Parser::wrap_base(ParserBase::FixPoint(Rc::new(RefCell::new(move |base| {
-            let parser: Parser<Err, T, TC, A> = Parser::wrap_base_(base);
-            return fix(&parser).base;
-        }))))
+        let ref_name = ParserReferenceName::new();
+        Parser::wrap_base(ParserBase::FixPoint(ref_name.clone(), fix(&Parser::wrap_base(ParserBase::Reference { name: ref_name })).base))
     }
 }
 
@@ -305,9 +303,15 @@ impl<S> GrammarNameGen<S> {
                 return (RuleOrToken::Rule(id), true);
             }
             ParserBase::Reference { name } => {
-                return (RuleOrToken::Rule(*name), false);
+                if let Some(id) = self.grammar_to_name.get(parser) {
+                    return (RuleOrToken::Rule(*id), false);
+                }
+                let id = self.next_id;
+                self.next_id += 1;
+                self.grammar_to_name.insert(ParserBase::clone(parser), id);
+                return (RuleOrToken::Rule(id), true);
             }
-            ParserBase::FixPoint(_) => {
+            ParserBase::FixPoint(_, _) => {
                 if let Some(id) = self.grammar_to_name.get(parser) {
                     return (RuleOrToken::Rule(*id), false);
                 }
@@ -326,6 +330,44 @@ enum RuleOrToken<S> {
     Token(S),
 }
 
+pub struct ParserReferenceName {
+    x: Rc<u32>,
+}
+
+impl ParserReferenceName {
+    pub fn new() -> ParserReferenceName {
+        ParserReferenceName {
+            x: Rc::new(0),
+        }
+    }
+}
+
+impl Clone for ParserReferenceName {
+    fn clone(&self) -> Self {
+        Self { x: Rc::clone(&self.x) }
+    }
+}
+
+impl PartialEq for ParserReferenceName {
+    fn eq(&self, other: &Self) -> bool {
+        let lhs: *const u32 = &*self.x;
+        let rhs: *const u32 = &*other.x;
+        let lhs = lhs as usize;
+        let rhs = rhs as usize;
+        return lhs == rhs;
+    }
+}
+
+impl Eq for ParserReferenceName {}
+
+impl std::hash::Hash for ParserReferenceName {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let x: *const u32 = &*self.x;
+        let x: usize = x as usize;
+        x.hash(state);
+    }
+}
+
 enum ParserBase<S> {
     Match {
         sym: S,
@@ -341,9 +383,9 @@ enum ParserBase<S> {
         effect: Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>,
     },
     Reference {
-        name: usize,
+        name: ParserReferenceName,
     },
-    FixPoint(Rc<RefCell<dyn FnMut(Rc<ParserBase<S>>) -> Rc<ParserBase<S>>>>),
+    FixPoint(ParserReferenceName, Rc<ParserBase<S>>),
 }
 
 impl<S: PartialEq> PartialEq for ParserBase<S> {
@@ -373,12 +415,8 @@ impl<S: PartialEq> PartialEq for ParserBase<S> {
             (Self::Reference { name: l_name }, Self::Reference { name: r_name }) => {
                 *l_name == *r_name
             }
-            (Self::FixPoint(l_fix), Self::FixPoint(r_fix)) => {
-                let l_ptr: *const RefCell<dyn FnMut(Rc<ParserBase<S>>) -> Rc<ParserBase<S>>> =
-                    &**l_fix;
-                let r_ptr: *const RefCell<dyn FnMut(Rc<ParserBase<S>>) -> Rc<ParserBase<S>>> =
-                    &**r_fix;
-                l_ptr == r_ptr
+            (Self::FixPoint(l_name, l_parser), Self::FixPoint(r_name, r_parser)) => {
+                l_name == r_name && l_parser == l_parser
             }
             _ => false,
         }
@@ -412,10 +450,10 @@ impl<S: PartialEq + Eq + std::hash::Hash> std::hash::Hash for ParserBase<S> {
                 state.write_usize(4);
                 name.hash(state);
             }
-            Self::FixPoint(fix) => {
+            Self::FixPoint(name, parser) => {
                 state.write_usize(5);
-                let ptr: *const RefCell<dyn FnMut(Rc<ParserBase<S>>) -> Rc<ParserBase<S>>> = &**fix;
-                ptr.hash(state);
+                name.hash(state);
+                parser.hash(state);
             }
         }
         core::mem::discriminant(self).hash(state);
@@ -436,8 +474,8 @@ impl<S: Clone> Clone for ParserBase<S> {
                 parser: Rc::clone(parser),
                 effect: Rc::clone(effect),
             },
-            ParserBase::Reference { name } => ParserBase::Reference { name: *name },
-            ParserBase::FixPoint(fix) => ParserBase::FixPoint(Rc::clone(fix)),
+            ParserBase::Reference { name } => ParserBase::Reference { name: name.clone(), },
+            ParserBase::FixPoint(name, parser) => ParserBase::FixPoint(name.clone(), Rc::clone(parser)),
         }
     }
 }
@@ -521,14 +559,12 @@ impl<S> ParserBase<S> {
             ParserBase::Reference { name } => {
                 return;
             }
-            ParserBase::FixPoint(fix) => {
+            ParserBase::FixPoint(name, parser) => {
                 let (name, is_new) = name_gen.gen_name(self);
                 if !is_new {
                     return;
                 }
-                let parser = fix.borrow_mut()(Rc::new(ParserBase::Reference {
-                    name: name_gen.gen_fresh_id(),
-                }));
+                // TODO: make parser reference of name the the parser passed to FixPoint
                 let gap_idx = rules_out.len();
                 let gap = crate::lr_parser::Rule::new(None, Vec::new(), None);
                 rules_out.push(gap);
@@ -566,8 +602,8 @@ impl<S> ParserBase<S> {
                     stack.push(Rc::clone(parser));
                 }
                 ParserBase::Reference { name: _ } => {}
-                ParserBase::FixPoint(fix) => {
-                    stack.push(fix.borrow_mut()(Rc::new(ParserBase::Reference { name: 0 })));
+                ParserBase::FixPoint(name, parser) => {
+                    stack.push(Rc::clone(parser));
                 }
             }
         }
