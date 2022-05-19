@@ -395,7 +395,7 @@ impl<S: PartialEq> PartialEq for ParserBase<S> {
                 *l_name == *r_name
             }
             (Self::FixPoint(l_name, l_parser), Self::FixPoint(r_name, r_parser)) => {
-                l_name == r_name && l_parser == l_parser
+                l_name == r_name && l_parser == r_parser
             }
             _ => false,
         }

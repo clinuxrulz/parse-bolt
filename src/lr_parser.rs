@@ -583,3 +583,40 @@ fn test_lr_parser() {
     println!("result:");
     println!("{}", lr_parser.forest[0]);
 }
+
+#[test]
+fn test_star() {
+    let grammar = Grammar(vec![
+        Rule {
+            name_op: None,
+            parts: vec!["A"],
+            effect_op: None,
+        },
+        Rule {
+            name_op: Some("A"),
+            parts: vec![],
+            effect_op: Some(Rc::new(RefCell::new(|stack: &mut Vec<Box<dyn Any>>| {
+                stack.push(Box::new(Vec::<usize>::new()))
+            }))),
+        },
+        Rule {
+            name_op: Some("A"),
+            parts: vec!["A", "a"],
+            effect_op: Some(Rc::new(RefCell::new(|stack: &mut Vec<Box<dyn Any>>| {
+                let elem: usize = *stack.pop().unwrap().downcast().ok().unwrap();
+                let mut list: Box<Vec<usize>> = stack.pop().unwrap().downcast().ok().unwrap();
+                list.push(elem);
+                stack.push(list);
+            }))),
+        },
+    ]);
+    let lexemes = Lexemes(vec!["a"]);
+    let lr_parser_tg = LrParserTableGenerator { grammar, lexemes };
+    let lr_parser_table = lr_parser_tg.generate_table();
+    let mut lr_parser = LrParser::new(lr_parser_table);
+    let _ = lr_parser.advance(Some("a"), Some(Box::new(1 as usize) as Box<dyn Any>));
+    let _ = lr_parser.advance(Some("a"), Some(Box::new(2 as usize) as Box<dyn Any>));
+    let _ = lr_parser.advance(Some("a"), Some(Box::new(3 as usize) as Box<dyn Any>));
+    let _ = lr_parser.advance(None, None);
+    println!("{:?}", lr_parser.value_stack.pop().unwrap().downcast::<Vec<usize>>().ok().unwrap());
+}
