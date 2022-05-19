@@ -669,12 +669,10 @@ fn test_parser_many0() {
             return self.0;
         }
     }
-    let parser: Parser<String, Token, char, Vec<Token>> = Parser::choice(vec![&Parser::match_('A'), &Parser::match_('B'), &Parser::match_('C')]).many0();
+    let parser: Parser<String, Token, char, _> = Parser::match_('A').many0();
     let mut parser_runner = parser.compile();
     println!("{:#?}", parser_runner.lr_parser);
     let _ = parser_runner.advance(Some(Token('A')));
-    let _ = parser_runner.advance(Some(Token('B')));
-    let _ = parser_runner.advance(Some(Token('C')));
     let _ = parser_runner.advance(Some(Token('A')));
     let _ = parser_runner.advance(None);
     if parser_runner.is_finished() {
