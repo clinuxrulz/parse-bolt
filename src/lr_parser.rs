@@ -210,7 +210,7 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
                                 for k in 0..rule.parts.len() {
                                     stack.push(Item {
                                         rule: rule_index,
-                                        index: 0,
+                                        index: k,
                                     });
                                     if !empty.contains(&rule.parts[k]) {
                                         break;
