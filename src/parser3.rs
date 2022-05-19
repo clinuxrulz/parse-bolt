@@ -106,7 +106,7 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
 
     pub fn compile(&self) -> ParserRunner<Err, T, TC, A>
     where
-        TC: Clone + std::fmt::Debug + PartialEq + Eq + std::hash::Hash,
+        TC: Clone + std::fmt::Debug + std::fmt::Display + PartialEq + Eq + std::hash::Hash,
     {
         let grammar = self.base.generate_grammar();
         let lexemes = self
@@ -115,6 +115,9 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
             .drain(0..)
             .map(RuleOrToken::Token)
             .collect();
+        for rule in &grammar {
+            println!("{}", rule);
+        }
         let lr_parser_tg = crate::lr_parser::LrParserTableGenerator::new(
             crate::lr_parser::Grammar(grammar),
             crate::lr_parser::Lexemes(lexemes),
@@ -314,6 +317,16 @@ impl<S> GrammarNameGen<S> {
 enum RuleOrToken<S> {
     Rule(usize),
     Token(S),
+}
+
+impl<S: std::fmt::Display> std::fmt::Display for RuleOrToken<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Rule(id) => write!(f, "rule_{}", id)?,
+            Self::Token(s) => s.fmt(f)?,
+        }
+        Ok(())
+    }
 }
 
 pub struct ParserReferenceName {
