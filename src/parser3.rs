@@ -222,9 +222,16 @@ impl<Err, T, TC> Parser<Err, T, TC, T> {
 
 impl<Err, T, TC> Parser<Err, T, TC, ()> {
     pub fn empty() -> Parser<Err, T, TC, ()> {
-        Parser::wrap_base(ParserBase::Seq {
-            parsers: Vec::new(),
-        })
+        Parser::wrap_base(
+            ParserBase::AndThenEffect {
+                parser: Rc::new(ParserBase::Seq {
+                    parsers: Vec::new(),
+                }),
+                effect: Rc::new(RefCell::new(|stack: &mut Vec<Box<dyn Any>>| {
+                    stack.push(Box::new(()));
+                }))
+            }
+        )
     }
 }
 
