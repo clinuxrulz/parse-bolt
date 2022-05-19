@@ -173,8 +173,9 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
 
     pub fn follow(&self, item_set: &ItemSet, sym: S) -> ItemSet
     where
-        S: PartialEq + Eq + Hash,
+        S: Clone + PartialEq + Eq + Hash,
     {
+        let empty = self.empty();
         let mut result: HashSet<Item> = HashSet::new();
         let mut stack: Vec<Item> = Vec::new();
         for item in &item_set.items {
@@ -206,10 +207,15 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
                     for rule in &self.grammar.0 {
                         if let Some(rule_name) = rule.name_op.as_ref() {
                             if *rule_name == *part0 {
-                                stack.push(Item {
-                                    rule: rule_index,
-                                    index: 0,
-                                })
+                                for k in 0..rule.parts.len() {
+                                    stack.push(Item {
+                                        rule: rule_index,
+                                        index: 0,
+                                    });
+                                    if !empty.contains(&rule.parts[k]) {
+                                        break;
+                                    }
+                                }
                             }
                         }
                         rule_index += 1;
