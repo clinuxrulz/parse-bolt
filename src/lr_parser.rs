@@ -149,6 +149,28 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
         rule.parts.get(item.index).map(S::clone)
     }
 
+    pub fn empty(&self) -> HashSet<S> where S: Clone + PartialEq + Eq + Hash {
+        let mut result = HashSet::new();
+        let mut again = false;
+        loop {
+            for rule in &self.grammar.0 {
+                if let Some(name) = &rule.name_op {
+                    if !result.contains(name) {
+                        let match_ = rule.parts.iter().all(|s| result.contains(s));
+                        if match_ {
+                            result.insert(S::clone(name));
+                            again = true;
+                        }
+                    }
+                }
+            }
+            if !again {
+                break;
+            }
+        }
+        result
+    }
+
     pub fn follow(&self, item_set: &ItemSet, sym: S) -> ItemSet
     where
         S: PartialEq + Eq + Hash,
