@@ -235,6 +235,7 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
     where
         S: Clone + PartialEq + Eq + Hash,
     {
+        let empty = self.empty();
         let mut result: HashSet<Item> = HashSet::new();
         let mut stack: Vec<Option<S>> = Vec::new();
         stack.push(None);
@@ -247,10 +248,15 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
                         index: 0,
                     });
                     if changed && !rule.parts.is_empty() {
-                        let part_0 = &rule.parts[0];
-                        if !self.lexemes.0.contains(part_0) {
-                            stack.push(Some(part_0.clone()));
-                            break;
+                        for k in 0..rule.parts.len() {
+                            let part_k = &rule.parts[k];
+                            if !self.lexemes.0.contains(part_k) {
+                                result.insert(Item { rule: rule_index, index: k, });
+                                stack.push(Some(part_k.clone()));
+                            }
+                            if !empty.contains(part_k) {
+                                break;
+                            }
                         }
                     }
                 }
