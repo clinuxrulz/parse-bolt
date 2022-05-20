@@ -151,8 +151,9 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
 
     pub fn empty(&self) -> HashSet<S> where S: Clone + PartialEq + Eq + Hash {
         let mut result = HashSet::new();
-        let mut again = false;
+        let mut again;
         loop {
+            again = false;
             for rule in &self.grammar.0 {
                 if let Some(name) = &rule.name_op {
                     if !result.contains(name) {
