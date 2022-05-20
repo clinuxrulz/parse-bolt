@@ -6,6 +6,8 @@ use super::token::{KTokenClass, Token};
 pub struct KotlinParser {
     pub simple_identifier: Parser<String, Token, KTokenClass, String>,
     pub identifier: Parser<String, Token, KTokenClass, data::Identifier>,
+    pub import_alias: Parser<String, Token, KTokenClass, data::ImportAlias>,
+    pub import_header: Parser<String, Token, KTokenClass, data::ImportHeader>,
 }
 
 impl KotlinParser {
@@ -68,9 +70,37 @@ impl KotlinParser {
                 .many1_sep(&Parser::match_(KTokenClass::Dot))
                 .map(|parts| data::Identifier { parts });
         //
+        let import_alias: Parser<String, Token, KTokenClass, data::ImportAlias> =
+            Parser::match_(KTokenClass::As)
+                .seq_right(&simple_identifier)
+                .map(|simple_identifier| data::ImportAlias { simple_identifier, });
+        let import_header: Parser<String, Token, KTokenClass, data::ImportHeader> =
+            Parser::match_(KTokenClass::Import)
+                .seq_right(&identifier)
+                .seq2(
+                    &Parser::choice(vec![
+                        &Parser::match_(KTokenClass::Dot)
+                            .seq2(&Parser::match_(KTokenClass::Asterisk))
+                            .map_to(data::ImportHeader2::DotMult),
+                        &import_alias.map(data::ImportHeader2::ImportAlias)
+                    ])
+                    .optional()
+                )
+                .seq_left(
+                    &Parser::match_(KTokenClass::Semicolon).optional()
+                )
+                .map(|(identifier, import_header_op)| {
+                    data::ImportHeader {
+                        identifier,
+                        import_header_op
+                    }
+                });
+        //
         KotlinParser {
             simple_identifier,
             identifier,
+            import_alias,
+            import_header,
         }
     }
 }

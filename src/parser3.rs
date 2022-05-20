@@ -1,4 +1,3 @@
-use super::TokenStream;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -169,6 +168,20 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         })
     }
 
+    pub fn seq_left<B: 'static>(&self, parser2: &Parser<Err, T, TC, B>) -> Parser<Err, T, TC, A>
+    where
+        A: 'static,
+    {
+        self.seq2(parser2).map(|(x, _)| x)
+    }
+
+    pub fn seq_right<B: 'static>(&self, parser2: &Parser<Err, T, TC, B>) -> Parser<Err, T, TC, B>
+    where
+        A: 'static,
+    {
+        self.seq2(parser2).map(|(_, x)| x)
+    }
+
     pub fn choice<'a>(parsers: Vec<&'a Parser<Err, T, TC, A>>) -> Parser<Err, T, TC, A> {
         Parser::wrap_base(ParserBase::Choice {
             parsers: parsers
@@ -176,6 +189,16 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
                 .map(|parser| Rc::clone(&(*parser).base))
                 .collect(),
         })
+    }
+
+    pub fn optional(&self) -> Parser<Err, T, TC, Option<A>>
+    where
+        A: 'static,
+    {
+        Parser::choice(vec![
+            &Parser::empty().map(|_| None),
+            &self.map(Some),
+        ])
     }
 
     pub fn many1(&self) -> Parser<Err, T, TC, Vec<A>>
@@ -215,6 +238,7 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         T: 'static,
         TC: 'static,
         A: 'static,
+        B: 'static,
     {
         self
             .seq2(&sep.seq_right(self).many0())
