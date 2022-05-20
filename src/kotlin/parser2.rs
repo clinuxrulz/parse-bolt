@@ -1,6 +1,4 @@
 // https://kotlinlang.org/docs/reference/grammar.html
-use super::super::choice_lazy;
-use super::super::kotlin;
 use super::super::parser3::Parser;
 use super::data;
 use super::token::{KTokenClass, Token};
@@ -8,7 +6,9 @@ use super::token::{KTokenClass, Token};
 pub fn simple_identifier() -> Parser<String, Token, KTokenClass, String> {
     Parser::choice(vec![
         &Parser::match_(KTokenClass::Id).map(|x| match x { Token::Id(x2) => x2, _ => unreachable!() }),
+        &Parser::match_(KTokenClass::Abstract).map(|_| "abstract".to_owned()),
         //&Parser::match_(KTokenClass::)
+        &Parser::match_(KTokenClass::Import).map(|_| "import".to_owned()),
         //&Parser::match_(KTokenClass::)
     ])
     //todo!();

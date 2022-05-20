@@ -502,6 +502,7 @@ impl TokenStream {
         }
 
         match &id[..] {
+            "abstract" => Token::Abstract,
             "as" => {
                 if self.cursor.u8() == b'?' {
                     self.cursor.next_byte();
@@ -520,6 +521,7 @@ impl TokenStream {
             "for" => Token::For,
             "fun" => Token::Fun,
             "if" => Token::If,
+            "import" => Token::Import,
             "in" => Token::In,
             "interface" => Token::Interface,
             "is" => Token::Is,
