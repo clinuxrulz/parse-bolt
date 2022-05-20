@@ -1,6 +1,7 @@
 pub mod data;
 pub mod lexer;
 pub mod parser;
+pub mod parser2;
 mod source;
 mod source_cursor;
 mod token_stream;
