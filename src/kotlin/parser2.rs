@@ -4,12 +4,14 @@ use super::data;
 use super::token::{KTokenClass, Token};
 
 pub struct KotlinParser {
-    pub simple_identifier: Parser<String, Token, KTolinClass, String>,
+    pub simple_identifier: Parser<String, Token, KTokenClass, String>,
+    pub identifier: Parser<String, Token, KTokenClass, data::Identifier>,
 }
 
 impl KotlinParser {
     pub fn new() -> KotlinParser {
-        let simple_identifer: Parser<String, Token, KTokenClass, String> =
+        //
+        let simple_identifier: Parser<String, Token, KTokenClass, String> =
             Parser::choice(vec![
                 &Parser::match_(KTokenClass::Id).map(|x| match x { Token::Id(x2) => x2, _ => unreachable!() }),
                 &Parser::match_(KTokenClass::Abstract).map(|_| "abstract".to_owned()),
@@ -60,8 +62,15 @@ impl KotlinParser {
                 &Parser::match_(KTokenClass::Suspend).map(|_| "suspend".to_owned()),
                 &Parser::match_(KTokenClass::Value).map(|_| "value".to_owned()),
             ]);
+        //
+        let identifier: Parser<String, Token, KTokenClass, data::Identifier> =
+            simple_identifier
+                .many1_sep(&Parser::match_(KTokenClass::Dot))
+                .map(|parts| data::Identifier { parts });
+        //
         KotlinParser {
             simple_identifier,
+            identifier,
         }
     }
 }

@@ -209,6 +209,18 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         })
     }
 
+    pub fn many1_sep<B>(&self, sep: &Parser<Err, T, TC, B>) -> Parser<Err, T, TC, Vec<A>>
+    where
+        Err: 'static,
+        T: 'static,
+        TC: 'static,
+        A: 'static,
+    {
+        self
+            .seq2(&sep.seq_right(self).many0())
+            .map(|(x, mut xs)| { xs.insert(0, x); xs })
+    }
+
     pub fn fix_point<Fix: FnOnce(&Parser<Err, T, TC, A>) -> Parser<Err, T, TC, A>>(
         fix: Fix,
     ) -> Parser<Err, T, TC, A> {
