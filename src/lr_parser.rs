@@ -9,8 +9,8 @@ use std::rc::Rc;
 pub struct LrParserTableGenerator<S> {
     grammar: Grammar<S>,
     lexemes: Lexemes<S>,
-    empty_set: HashSet<S>,
-    first_table: HashMap<Option<S>,HashSet<S>>,
+    empty: HashSet<S>,
+    first: HashMap<Option<S>,HashSet<S>>,
 }
 
 impl<S> LrParserTableGenerator<S> {
@@ -20,11 +20,11 @@ impl<S> LrParserTableGenerator<S> {
         let mut r = LrParserTableGenerator {
             grammar,
             lexemes,
-            empty_set: HashSet::new(),
-            first_table: HashMap::new(),
+            empty: HashSet::new(),
+            first: HashMap::new(),
         };
-        r.empty_set = r.empty();
-        r.first_table = r.first_lexemes();
+        r.empty = r.empty();
+        r.first = r.first_lexemes();
         r
     }
 }
@@ -203,7 +203,7 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
         for Rule { name_op: lhs, parts: rhs, effect_op: _ } in &self.grammar.0 {
             for rhs_n in rhs {
                 routes.insert((Option::clone(lhs), S::clone(rhs_n)));
-                if !self.empty_set.contains(&rhs_n) {
+                if !self.empty.contains(&rhs_n) {
                     break;
                 }
             }
@@ -773,5 +773,5 @@ fn test_simple() {
     ]);
     let lexemes = Lexemes(vec!["*", "(", ")", "name", "int"]);
     let lr_parser_tg = LrParserTableGenerator::new(grammar, lexemes);
-    println!("{:#?}", lr_parser_tg.first_table);
+    println!("{:#?}", lr_parser_tg.first);
 }
