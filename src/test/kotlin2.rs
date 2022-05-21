@@ -1,14 +1,13 @@
 use crate::kotlin::parser2::KotlinParser;
 use crate::kotlin::source::Source;
 use crate::kotlin::source_cursor::SourceCursor;
-use crate::kotlin::token::Token;
+use crate::kotlin::token::{Token, KTokenClass};
 use crate::kotlin::token_stream::TokenStream;
+use crate::parser3::Parser;
 
-#[test]
-fn test_kotlin2_import_header() {
-    let parser = KotlinParser::new();
-    let mut runner = parser.import_header.compile();
-    let source = Source::from_str("import java.lang.String as JString;");
+fn run_parser<A: 'static>(parser: &Parser<String, Token, KTokenClass, A>, code: &str) -> Result<A, String> {
+    let mut runner = parser.compile();
+    let source = Source::from_str(code);
     let source_cursor = SourceCursor::new(source);
     let mut token_stream = TokenStream::new(source_cursor);
     loop {
@@ -16,23 +15,29 @@ fn test_kotlin2_import_header() {
             Ok((token, byte_span)) => {
                 match token {
                     Token::EOF => {
-                        let _ = runner.advance(None);
+                        runner.advance(None)?;
                         break;
                     }
                     _ => {
-                        let _ = runner.advance(Some(token));
+                        runner.advance(Some(token))?;
                     }
                 }
             },
             Err(err) => {
-                println!("{:?}", err);
-                break;
+                return Err(format!("{:?}", err));
             }
         }
     }
     if runner.is_finished() {
-        println!("{:?}", runner.get_result());
+        return Ok(runner.get_result());
     } else {
-        println!("more tokens expected.");
+        return Err("more tokens expected.".to_owned());
     }
+}
+
+#[test]
+fn test_kotlin2_import_header() {
+    let parser = KotlinParser::new();
+    let r = run_parser(&parser.import_header, "import java.lang.String as JString;");
+    println!("{:?}", r);
 }

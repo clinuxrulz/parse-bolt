@@ -1,6 +1,7 @@
 mod backtracking;
 mod iteratee_parser2;
 mod kotlin;
+#[cfg(test)]
 mod kotlin2;
 mod python;
 
