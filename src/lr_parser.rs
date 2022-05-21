@@ -23,7 +23,7 @@ impl<S> LrParserTableGenerator<S> {
             empty: HashSet::new(),
             first: HashMap::new(),
         };
-        r.empty = r.empty();
+        r.empty = r.empty_symbols();
         r.first = r.first_lexemes();
         r
     }
@@ -161,7 +161,7 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
         rule.parts.get(item.index).map(S::clone)
     }
 
-    pub fn empty(&self) -> HashSet<S> where S: Clone + PartialEq + Eq + Hash {
+    pub fn empty_symbols(&self) -> HashSet<S> where S: Clone + PartialEq + Eq + Hash {
         let mut result = HashSet::new();
         let mut again;
         loop {
@@ -232,7 +232,7 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
     where
         S: Clone + PartialEq + Eq + Hash,
     {
-        let empty = self.empty();
+        let empty = self.empty_symbols();
         let mut result: HashSet<Item> = HashSet::new();
         let mut stack: Vec<Item> = Vec::new();
         for item in &item_set.items {
@@ -300,7 +300,7 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
     where
         S: Clone + PartialEq + Eq + Hash,
     {
-        let empty = self.empty();
+        let empty = self.empty_symbols();
         let mut result: HashSet<Item> = HashSet::new();
         let mut stack: Vec<Option<S>> = Vec::new();
         stack.push(None);
