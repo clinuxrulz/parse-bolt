@@ -38,7 +38,7 @@ fn run_parser<A: 'static>(parser: &Parser<String, Token, KTokenClass, A>, code: 
 #[test]
 fn test_kotlin2_identifier() {
     let parser = KotlinParser::new();
-    let r = run_parser(&parser.identifier, "test1.test2.test3");
+    let r = run_parser(&parser.identifier, "test1.test2");
     println!("{:?}", r);
 }
 
