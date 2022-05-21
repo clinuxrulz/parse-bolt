@@ -209,6 +209,7 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
                         if let Some(rule_name) = rule.name_op.as_ref() {
                             if *rule_name == *part0 {
                                 for k in 0..rule.parts.len() {
+                                    result.insert(item);
                                     stack.push(Item {
                                         rule: rule_index,
                                         index: k,
@@ -250,8 +251,8 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
                     if changed && !rule.parts.is_empty() {
                         for k in 0..rule.parts.len() {
                             let part_k = &rule.parts[k];
+                            result.insert(Item { rule: rule_index, index: k, });
                             if !self.lexemes.0.contains(part_k) {
-                                result.insert(Item { rule: rule_index, index: k, });
                                 stack.push(Some(part_k.clone()));
                             }
                             if !empty.contains(part_k) {

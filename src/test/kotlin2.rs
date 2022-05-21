@@ -5,8 +5,9 @@ use crate::kotlin::token::{Token, KTokenClass};
 use crate::kotlin::token_stream::TokenStream;
 use crate::parser3::Parser;
 
-fn run_parser<A: 'static>(parser: &Parser<String, Token, KTokenClass, A>, code: &str) -> Result<A, String> {
+fn run_parser<A: std::fmt::Debug + 'static>(parser: &Parser<String, Token, KTokenClass, A>, code: &str) -> Result<A, String> {
     let mut runner = parser.compile();
+    println!("runner: {:#?}", runner);
     let source = Source::from_str(code);
     let source_cursor = SourceCursor::new(source);
     let mut token_stream = TokenStream::new(source_cursor);
@@ -33,6 +34,17 @@ fn run_parser<A: 'static>(parser: &Parser<String, Token, KTokenClass, A>, code: 
     } else {
         return Err("more tokens expected.".to_owned());
     }
+}
+
+#[test]
+fn test_simple() {
+    let parser = KotlinParser::new();
+    let r = run_parser(
+        &Parser::match_(KTokenClass::Id)
+            .seq2(&Parser::seq_right(&Parser::match_(KTokenClass::Dot), &Parser::match_(KTokenClass::Id))),
+            "test1.test2"
+        );
+    println!("{:?}", r);
 }
 
 #[test]

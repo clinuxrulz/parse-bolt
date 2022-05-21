@@ -39,6 +39,7 @@ impl<Err, T, TC, A> Clone for Parser<Err, T, TC, A> {
     }
 }
 
+#[derive(Debug)]
 pub struct ParserRunner<Err, T, TC, A> {
     phantom_err: PhantomData<Err>,
     phantom_t: PhantomData<T>,
