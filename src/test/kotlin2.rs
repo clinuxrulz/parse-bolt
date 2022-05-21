@@ -38,7 +38,6 @@ fn run_parser<A: std::fmt::Debug + 'static>(parser: &Parser<String, Token, KToke
 
 #[test]
 fn test_simple() {
-    let parser = KotlinParser::new();
     let r = run_parser(
         &Parser::match_(KTokenClass::Id)
             .seq2(&Parser::seq_right(&Parser::match_(KTokenClass::Dot), &Parser::match_(KTokenClass::Id))),
