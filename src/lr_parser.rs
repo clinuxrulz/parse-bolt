@@ -720,3 +720,53 @@ fn test_star() {
     let _ = lr_parser.advance(None, None);
     println!("{:?}", lr_parser.value_stack.pop().unwrap().downcast::<Vec<usize>>().ok().unwrap());
 }
+
+#[test]
+fn test_simple() {
+    // https://serokell.io/blog/how-to-implement-lr1-parser
+    let grammar = Grammar(vec![
+        Rule {
+            name_op: None,
+            parts: vec!["Add"],
+            effect_op: None,
+        },
+        Rule {
+            name_op: Some("Add"),
+            parts: vec!["Add", "+", "Factor"],
+            effect_op: None,
+        },
+        Rule {
+            name_op: Some("Add"),
+            parts: vec!["Factor"],
+            effect_op: None,
+        },
+        Rule {
+            name_op: Some("Factor"),
+            parts: vec!["Factor", "*", "Term"],
+            effect_op: None,
+        },
+        Rule {
+            name_op: Some("Factor"),
+            parts: vec!["Term"],
+            effect_op: None,
+        },
+        Rule {
+            name_op: Some("Term"),
+            parts: vec!["(", "Add", ")"],
+            effect_op: None,
+        },
+        Rule {
+            name_op: Some("Term"),
+            parts: vec!["name"],
+            effect_op: None,
+        },
+        Rule {
+            name_op: Some("Term"),
+            parts: vec!["int"],
+            effect_op: None,
+        },
+    ]);
+    let lexemes = Lexemes(vec!["varDecl", "constDecl", "statement"]);
+    let lr_parser_tg = LrParserTableGenerator::new(grammar, lexemes);
+    println!("{:?}", lr_parser_tg.first_table);
+}
