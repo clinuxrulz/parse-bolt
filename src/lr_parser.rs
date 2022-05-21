@@ -313,21 +313,23 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
                         index: 0,
                     });
                     if changed && !rule.parts.is_empty() {
-                        let mut reached_end = true;
-                        for k in 0..rule.parts.len() {
+                        //
+                        let k = 0;
+                        //let mut reached_end = true;
+                        //for k in 0..rule.parts.len() {
                             let part_k = &rule.parts[k];
                             result.insert(Item { rule: rule_index, index: k, });
                             if !self.lexemes.0.contains(part_k) {
                                 stack.push(Some(part_k.clone()));
                             }
-                            if !empty.contains(part_k) {
-                                reached_end = false;
-                                break;
-                            }
-                        }
-                        if reached_end {
-                            result.insert(Item { rule: rule_index, index: rule.parts.len() });
-                        }
+                            //if !empty.contains(part_k) {
+                                //reached_end = false;
+                                //break;
+                            //}
+                        //}
+                        //if reached_end {
+                        //    result.insert(Item { rule: rule_index, index: rule.parts.len() });
+                        //}
                     }
                 }
                 rule_index += 1;
