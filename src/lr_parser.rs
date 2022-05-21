@@ -9,11 +9,20 @@ use std::rc::Rc;
 pub struct LrParserTableGenerator<S> {
     grammar: Grammar<S>,
     lexemes: Lexemes<S>,
+    first_table: HashMap<Option<S>,HashSet<Option<S>>>,
 }
 
 impl<S> LrParserTableGenerator<S> {
-    pub fn new(grammar: Grammar<S>, lexemes: Lexemes<S>) -> LrParserTableGenerator<S> {
-        LrParserTableGenerator { grammar, lexemes }
+    pub fn new(grammar: Grammar<S>, lexemes: Lexemes<S>) -> LrParserTableGenerator<S>
+    where S: Clone + PartialEq + Eq + Hash + std::fmt::Debug
+    {
+        let mut r = LrParserTableGenerator {
+            grammar,
+            lexemes,
+            first_table: HashMap::new(),
+        };
+        r.generate_first_table();
+        r
     }
 }
 
@@ -170,6 +179,48 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
             }
         }
         result
+    }
+
+    pub fn first(&self, sym_op: Option<S>) -> HashSet<Option<S>>
+    where
+        S: Clone + PartialEq + Eq + Hash
+    {
+        let mut result = HashSet::new();
+        let mut stack = Vec::new();
+        let mut visited = HashSet::new();
+        stack.push(sym_op);
+        while let Some(sym_op) = stack.pop() {
+            if visited.contains(&sym_op) {
+                continue;
+            }
+            visited.insert(Option::clone(&sym_op));
+            for rule in &self.grammar.0 {
+                if rule.name_op == sym_op {
+                    if rule.parts.is_empty() {
+                        result.insert(None);
+                    } else {
+                        let part_0 = &rule.parts[0];
+                        if self.lexemes.0.contains(part_0) {
+                            result.insert(Some(S::clone(part_0)));
+                        } else {
+                            stack.push(Some(S::clone(part_0)));
+                        }
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    pub fn generate_first_table(&mut self)
+    where
+        S: Clone + PartialEq + Eq + Hash
+    {
+        for rule in &self.grammar.0 {
+            if !self.first_table.contains_key(&rule.name_op) {
+                self.first_table.insert(Option::clone(&rule.name_op), self.first(Option::clone(&rule.name_op)));
+            }
+        }
     }
 
     pub fn follow(&self, item_set: &ItemSet, sym: S) -> ItemSet
@@ -588,7 +639,7 @@ fn test_lr_parser() {
         },
     ]);
     let lexemes = Lexemes(vec!["varDecl", "constDecl", "statement"]);
-    let lr_parser_tg = LrParserTableGenerator { grammar, lexemes };
+    let lr_parser_tg = LrParserTableGenerator::new(grammar, lexemes);
     println!("---");
     println!("create state 0 item set:");
     let state0_item_set = lr_parser_tg.create_state_0_item_set();
@@ -660,7 +711,7 @@ fn test_star() {
         },
     ]);
     let lexemes = Lexemes(vec!["a"]);
-    let lr_parser_tg = LrParserTableGenerator { grammar, lexemes };
+    let lr_parser_tg = LrParserTableGenerator::new(grammar, lexemes);
     let lr_parser_table = lr_parser_tg.generate_table();
     let mut lr_parser = LrParser::new(lr_parser_table);
     let _ = lr_parser.advance(Some("a"), Some(Box::new(1 as usize) as Box<dyn Any>));
