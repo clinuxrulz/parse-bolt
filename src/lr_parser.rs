@@ -766,7 +766,7 @@ fn test_simple() {
             effect_op: None,
         },
     ]);
-    let lexemes = Lexemes(vec!["varDecl", "constDecl", "statement"]);
+    let lexemes = Lexemes(vec!["*", "(", ")", "name", "int"]);
     let lr_parser_tg = LrParserTableGenerator::new(grammar, lexemes);
     println!("{:?}", lr_parser_tg.first_table);
 }
