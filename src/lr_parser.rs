@@ -9,7 +9,8 @@ use std::rc::Rc;
 pub struct LrParserTableGenerator<S> {
     grammar: Grammar<S>,
     lexemes: Lexemes<S>,
-    first_table: HashMap<Option<S>,HashSet<Option<S>>>,
+    empty_set: HashSet<S>,
+    first_table: HashMap<Option<S>,HashSet<S>>,
 }
 
 impl<S> LrParserTableGenerator<S> {
@@ -19,9 +20,11 @@ impl<S> LrParserTableGenerator<S> {
         let mut r = LrParserTableGenerator {
             grammar,
             lexemes,
+            empty_set: HashSet::new(),
             first_table: HashMap::new(),
         };
-        r.generate_first_table();
+        r.empty_set = r.empty();
+        r.first_table = r.first_lexemes();
         r
     }
 }
@@ -181,46 +184,48 @@ impl<S: std::fmt::Debug> LrParserTableGenerator<S> {
         result
     }
 
-    pub fn first(&self, sym_op: Option<S>) -> HashSet<Option<S>>
+    pub fn first_lexemes(&self) -> HashMap<Option<S>, HashSet<S>>
     where
         S: Clone + PartialEq + Eq + Hash
     {
-        let mut result = HashSet::new();
-        let mut stack = Vec::new();
-        let mut visited = HashSet::new();
-        stack.push(sym_op);
-        while let Some(sym_op) = stack.pop() {
-            if visited.contains(&sym_op) {
-                continue;
+        let mut symbols = HashMap::new();
+        let mut routes = HashSet::new();
+        for sym in &self.lexemes.0 {
+            let mut tmp = HashSet::new();
+            tmp.insert(S::clone(sym));
+            symbols.insert(Some(S::clone(sym)), tmp);
+        }
+        for Rule { name_op: lhs, parts: _rhs, effect_op: _ } in &self.grammar.0 {
+            if !symbols.contains_key(lhs) {
+                symbols.insert(Option::clone(lhs), HashSet::new());
             }
-            visited.insert(Option::clone(&sym_op));
-            for rule in &self.grammar.0 {
-                if rule.name_op == sym_op {
-                    if rule.parts.is_empty() {
-                        result.insert(None);
-                    } else {
-                        let part_0 = &rule.parts[0];
-                        if self.lexemes.0.contains(part_0) {
-                            result.insert(Some(S::clone(part_0)));
-                        } else {
-                            stack.push(Some(S::clone(part_0)));
-                        }
-                    }
+        }
+        for Rule { name_op: lhs, parts: rhs, effect_op: _ } in &self.grammar.0 {
+            for rhs_n in rhs {
+                routes.insert((Option::clone(lhs), S::clone(rhs_n)));
+                if !self.empty_set.contains(&rhs_n) {
+                    break;
                 }
             }
         }
-        result
-    }
-
-    pub fn generate_first_table(&mut self)
-    where
-        S: Clone + PartialEq + Eq + Hash
-    {
-        for rule in &self.grammar.0 {
-            if !self.first_table.contains_key(&rule.name_op) {
-                self.first_table.insert(Option::clone(&rule.name_op), self.first(Option::clone(&rule.name_op)));
+        let mut rep = true;
+        while rep {
+            rep = false;
+            for (lhs, rhs0) in &routes {
+                let n = symbols.get(lhs).map(HashSet::len).unwrap_or(0);
+                let tmp = symbols.get(&Some(S::clone(rhs0))).map(HashSet::clone).unwrap_or_else(|| HashSet::new());
+                if let Some(tmp2) = symbols.get_mut(lhs) {
+                    for x in tmp {
+                        tmp2.insert(x);
+                    }
+                } else {
+                    symbols.insert(Option::clone(lhs), tmp);
+                }
+                let tmp = symbols.get(lhs).map(HashSet::len).unwrap_or(0);
+                rep |= n < tmp;
             }
         }
+        return symbols;
     }
 
     pub fn follow(&self, item_set: &ItemSet, sym: S) -> ItemSet
@@ -768,5 +773,5 @@ fn test_simple() {
     ]);
     let lexemes = Lexemes(vec!["*", "(", ")", "name", "int"]);
     let lr_parser_tg = LrParserTableGenerator::new(grammar, lexemes);
-    println!("{:?}", lr_parser_tg.first_table);
+    println!("{:#?}", lr_parser_tg.first_table);
 }
