@@ -61,7 +61,36 @@ impl<S: std::fmt::Debug> std::fmt::Debug for ShiftOrReduce<S> {
     }
 }
 
-type State<S> = HashMap<S,ShiftOrReduce<S>>;
+pub struct Reduce<S> {
+    lookahead: S,
+    rule_name_op: Option<S>,
+    effect_op: Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>,
+}
+
+impl<S: std::fmt::Debug> std::fmt::Debug for Reduce<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f
+            .debug_struct("Reduce")
+            .field("lookahead", &self.lookahead)
+            .field("rule_name_op", &self.rule_name_op)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
+pub struct State<S> {
+    shifts: HashMap<S,usize>,
+    reduces: Vec<Reduce<S>>,
+}
+
+impl<S> State<S> {
+    fn new() -> State<S> {
+        State {
+            shifts: HashMap::new(),
+            reduces: Vec::new(),
+        }
+    }
+}
 
 type Table<S> = Vec<State<S>>;
 
@@ -463,17 +492,27 @@ where
     for item_set in states.keys() {
         let state_idx = states.get(item_set).unwrap();
         let edges = edges(grammar, item_set);
-        let mut state: HashMap<S, ShiftOrReduce<S>> = HashMap::new();
+        let mut state = State::new();
         for edge in edges {
             let next_item_set = goto(grammar, lexemes, first, follow, item_set, &edge);
             let next_state_idx = states.get(&next_item_set).unwrap();
-            state.insert(edge, ShiftOrReduce::Shift(*next_state_idx));
+            state.shifts.insert(edge, *next_state_idx);
+        }
+        for item in &item_set.0 {
+            let rule = &grammar[item.rule];
+            if item.index == rule.parts.len()-1 {
+                state.reduces.push(Reduce {
+                    lookahead: S::clone(&item.lookahead),
+                    rule_name_op: Option::clone(&rule.name_op),
+                    effect_op: rule.effect_op.as_ref().map(Rc::clone),
+                });
+            }
         }
         table.insert(*state_idx, state);
     }
     let mut result = Vec::new();
     for i in 0..table.len() {
-        let mut tmp = HashMap::new();
+        let mut tmp = State::new();
         std::mem::swap(&mut tmp, table.get_mut(&i).unwrap());
         result.push(tmp);
     }
