@@ -500,7 +500,7 @@ where
         }
         for item in &item_set.0 {
             let rule = &grammar[item.rule];
-            if item.index == rule.parts.len()-1 {
+            if item.index == rule.parts.len() {
                 state.reduces.push(Reduce {
                     lookahead: S::clone(&item.lookahead),
                     rule_name_op: Option::clone(&rule.name_op),
