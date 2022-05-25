@@ -25,6 +25,9 @@ fn run_parser<A: std::fmt::Debug + 'static>(parser: &Parser<String, Token, KToke
             }
         }
     }
+    // TODO: FIXME: End of file token currently needs to be sent twice. Once for consumed, and next for lookahead for final rule match.
+    runner.advance(Token::EOF)?;
+    //
     if runner.is_finished() {
         return Ok(runner.get_result());
     } else {
