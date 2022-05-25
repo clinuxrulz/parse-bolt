@@ -640,7 +640,11 @@ fn test_lr1_parser() {
         Rule {
             name_op: Some("Add"),
             parts: vec!["Add", "+", "Factor"],
-            effect_op: None,
+            effect_op: Some(Rc::new(RefCell::new(|value_stack: &mut Vec<Box<dyn Any>>| {
+                let rhs: i32 = *value_stack.pop().unwrap().downcast().ok().unwrap();
+                let lhs: i32 = *value_stack.pop().unwrap().downcast().ok().unwrap();
+                value_stack.push(Box::new(lhs + rhs) as Box<dyn Any>);
+            }))),
         },
         Rule {
             name_op: Some("Add"),
@@ -650,7 +654,11 @@ fn test_lr1_parser() {
         Rule {
             name_op: Some("Factor"),
             parts: vec!["Factor", "*", "Term"],
-            effect_op: None,
+            effect_op: Some(Rc::new(RefCell::new(|value_stack: &mut Vec<Box<dyn Any>>| {
+                let rhs: i32 = *value_stack.pop().unwrap().downcast().ok().unwrap();
+                let lhs: i32 = *value_stack.pop().unwrap().downcast().ok().unwrap();
+                value_stack.push(Box::new(lhs * rhs) as Box<dyn Any>);
+            }))),
         },
         Rule {
             name_op: Some("Factor"),
@@ -690,9 +698,10 @@ fn test_lr1_parser() {
         println!("  {}: {:?}", i, table[i]);
     }
     let mut parser = Lr1Parser::new(table);
-    let _ = parser.advance(&"int", Some(Box::new(5)));
-    let _ = parser.advance(&"+", Some(Box::new(())));
-    let _ = parser.advance(&"int", Some(Box::new(5)));
-    let _ = parser.advance(&"$", Some(Box::new(())));
-    let x = parser.get_value_stack_mut();
+    let _ = parser.advance(&"int", Some(Box::new(3 as i32)));
+    let _ = parser.advance(&"+", None);
+    let _ = parser.advance(&"int", Some(Box::new(5 as i32)));
+    let _ = parser.advance(&"$", None);
+    let x: i32 = *parser.get_value_stack_mut().pop().unwrap().downcast().ok().unwrap();
+    println!("result {}", x);
 }
