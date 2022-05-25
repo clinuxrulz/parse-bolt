@@ -44,6 +44,7 @@ pub struct ParserRunner<Err, T, TC, A> {
     phantom_err: PhantomData<Err>,
     phantom_t: PhantomData<T>,
     phantom_a: PhantomData<A>,
+    eof_sym: TC,
     lr1_parser: crate::lr1_parser::Lr1Parser<RuleOrToken<TC>>,
     result_fetched: bool,
 }
@@ -58,7 +59,11 @@ impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
         self.lr1_parser
             .advance(
                 &RuleOrToken::Token(token.token_class()),
-                Some(Box::new(token) as Box<dyn Any>),
+                if token.token_class() == self.eof_sym {
+                    None
+                } else {
+                    Some(Box::new(token) as Box<dyn Any>)
+                },
             )
             .map_err(Err::from)
     }
@@ -105,7 +110,7 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
     where
         TC: Clone + std::fmt::Debug + std::fmt::Display + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord,
     {
-        let grammar = self.base.generate_grammar();
+        let grammar = self.base.generate_grammar(&eof_sym);
         for rule in &grammar {
             println!("{}", rule);
         }
@@ -115,6 +120,7 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
             phantom_err: PhantomData,
             phantom_t: PhantomData,
             phantom_a: PhantomData,
+            eof_sym: TC::clone(eof_sym),
             lr1_parser: lr1_parser,
             result_fetched: false,
         }
@@ -504,7 +510,7 @@ impl<S: Clone> Clone for ParserBase<S> {
 }
 
 impl<S> ParserBase<S> {
-    fn generate_grammar(&self) -> Vec<crate::lr1_parser::Rule<RuleOrToken<S>>>
+    fn generate_grammar(&self, eof_sym: &S) -> Vec<crate::lr1_parser::Rule<RuleOrToken<S>>>
     where
         S: Clone + PartialEq + Eq + std::hash::Hash,
     {
@@ -514,7 +520,7 @@ impl<S> ParserBase<S> {
         rules.push(gap);
         let mut fix_point_map = HashMap::new();
         self.generate_grammar_(&mut name_gen, &mut rules, &mut fix_point_map);
-        rules[0] = crate::lr1_parser::Rule::new(None, vec![name_gen.gen_name(self, &mut fix_point_map).0], None);
+        rules[0] = crate::lr1_parser::Rule::new(None, vec![name_gen.gen_name(self, &mut fix_point_map).0, RuleOrToken::Token(S::clone(eof_sym))], None);
         rules
     }
 
@@ -650,7 +656,7 @@ fn test_combinator_to_grammar() {
             }),
         ],
     };
-    let rules = combinator.generate_grammar();
+    let rules = combinator.generate_grammar(&'$');
     println!("Rules:");
     for i in 0..rules.len() {
         println!("  {}: {}", i, rules[i]);
@@ -681,6 +687,7 @@ fn test_build_parser() {
     let _ = parser_runner.advance(Token('A'));
     let _ = parser_runner.advance(Token('B'));
     let _ = parser_runner.advance(Token('C'));
+    let _ = parser_runner.advance(Token('$'));
     let _ = parser_runner.advance(Token('$'));
     if parser_runner.is_finished() {
         println!("{:?}", parser_runner.get_result());

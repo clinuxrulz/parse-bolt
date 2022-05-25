@@ -539,6 +539,7 @@ pub struct Lr1Parser<S> {
     control_stack_top: usize,
     control_stack: Vec<usize>,
     value_stack: Vec<Box<dyn Any>>,
+    finished: bool,
 }
 
 impl<S> Lr1Parser<S> {
@@ -548,6 +549,7 @@ impl<S> Lr1Parser<S> {
             control_stack_top: 0,
             control_stack: Vec::new(),
             value_stack: Vec::new(),
+            finished: false,
         }
     }
 
@@ -576,7 +578,7 @@ impl<S> Lr1Parser<S> {
     }
 
     pub fn is_finished(&self) -> bool {
-        return self.table[self.control_stack_top].reduces.iter().any(|reduce| reduce.rule_name_op.is_none());
+        return self.finished;
     }
 
     pub fn advance(&mut self, sym: &S, value_op: Option<Box<dyn Any>>) -> Result<bool, String>
@@ -629,6 +631,7 @@ impl<S> Lr1Parser<S> {
                     effect.borrow_mut()(&mut self.value_stack);
                 }
                 if reduce.rule_name_op.is_none() {
+                    self.finished = true;
                     break;
                 }
                 let state = &self.table[self.control_stack_top];
