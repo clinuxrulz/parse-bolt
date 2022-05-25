@@ -620,6 +620,9 @@ impl<S> Lr1Parser<S> {
                 if reduce.rule_name_op.is_none() {
                     break;
                 }
+                let state = &self.table[self.control_stack_top];
+                let control = *state.shifts.get(reduce.rule_name_op.as_ref().unwrap()).unwrap();
+                self.push_control(control);
             }
         }
         Ok(self.is_finished())
@@ -686,4 +689,10 @@ fn test_lr1_parser() {
     for i in 0..table.len() {
         println!("  {}: {:?}", i, table[i]);
     }
+    let mut parser = Lr1Parser::new(table);
+    let _ = parser.advance(&"int", Some(Box::new(5)));
+    let _ = parser.advance(&"+", Some(Box::new(())));
+    let _ = parser.advance(&"int", Some(Box::new(5)));
+    let _ = parser.advance(&"$", Some(Box::new(())));
+    let x = parser.get_value_stack_mut();
 }
