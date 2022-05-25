@@ -701,6 +701,8 @@ fn test_lr1_parser() {
     let _ = parser.advance(&"int", Some(Box::new(3 as i32)));
     let _ = parser.advance(&"+", None);
     let _ = parser.advance(&"int", Some(Box::new(5 as i32)));
+    let _ = parser.advance(&"*", None);
+    let _ = parser.advance(&"int", Some(Box::new(3 as i32)));
     let _ = parser.advance(&"$", None);
     let x: i32 = *parser.get_value_stack_mut().pop().unwrap().downcast().ok().unwrap();
     println!("result {}", x);
