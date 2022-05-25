@@ -3,6 +3,8 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+// Reference: https://serokell.io/blog/how-to-implement-lr1-parser
+
 pub struct Rule<S> {
     name_op: Option<S>,
     parts: Vec<S>,
@@ -49,7 +51,19 @@ pub type Lexemes<S> = Vec<S>;
 pub struct Reduce<S> {
     lookahead: S,
     rule_name_op: Option<S>,
+    consume_count: usize,
     effect_op: Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>,
+}
+
+impl<S: Clone> Clone for Reduce<S> {
+    fn clone(&self) -> Self {
+        Reduce {
+            lookahead: S::clone(&self.lookahead),
+            rule_name_op: Option::clone(&self.rule_name_op),
+            consume_count: self.consume_count,
+            effect_op: self.effect_op.as_ref().map(Rc::clone),
+        }
+    }
 }
 
 impl<S: std::fmt::Debug> std::fmt::Debug for Reduce<S> {
@@ -58,7 +72,8 @@ impl<S: std::fmt::Debug> std::fmt::Debug for Reduce<S> {
             .debug_struct("Reduce")
             .field("lookahead", &self.lookahead)
             .field("rule_name_op", &self.rule_name_op)
-            .finish()
+            .field("consume_count", &self.consume_count)
+            .finish_non_exhaustive()
     }
 }
 
@@ -469,6 +484,7 @@ where
                 state.reduces.push(Reduce {
                     lookahead: S::clone(&item.lookahead),
                     rule_name_op: Option::clone(&rule.name_op),
+                    consume_count: rule.parts.len(),
                     effect_op: rule.effect_op.as_ref().map(Rc::clone),
                 });
             }
@@ -484,7 +500,7 @@ where
     result
 }
 
-pub fn make_table<S>(grammar: &Grammar<S>, eof_sym: S) -> Table<S>
+pub fn make_table<S>(grammar: &Grammar<S>, eof_sym: &S) -> Table<S>
 where
     S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
 {
@@ -499,12 +515,115 @@ where
             start_op = Some(Item {
                 rule: rule_idx,
                 index: 0,
-                lookahead: S::clone(&eof_sym)
+                lookahead: S::clone(eof_sym)
             });
             break;
         }
     }
     make_table_(grammar, &lexemes, &first, &follow, &start_op.expect("start grammar rule not found."))
+}
+
+pub struct Lr1Parser<S> {
+    table: Table<S>,
+    control_stack_top: usize,
+    control_stack: Vec<usize>,
+    value_stack: Vec<Box<dyn Any>>,
+}
+
+impl<S> Lr1Parser<S> {
+    pub fn new(table: Table<S>) -> Lr1Parser<S> {
+        Lr1Parser {
+            table,
+            control_stack_top: 0,
+            control_stack: Vec::new(),
+            value_stack: Vec::new(),
+        }
+    }
+
+    pub fn from_grammar(grammar: &Grammar<S>, eof_sym: &S) -> Lr1Parser<S>
+    where
+        S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
+    {
+        Lr1Parser::new(make_table(grammar, eof_sym))
+    }
+
+    fn push_control(&mut self, control: usize) {
+        self.control_stack.push(self.control_stack_top);
+        self.control_stack_top = control;
+    }
+
+    fn pop_control(&mut self) -> usize {
+        let result = self.control_stack_top;
+        if let Some(x) = self.control_stack.pop() {
+            self.control_stack_top = x;
+        }
+        result
+    }
+
+    pub fn get_value_stack_mut(&mut self) -> &mut Vec<Box<dyn Any>> {
+        &mut self.value_stack
+    }
+
+    pub fn is_finished(&self) -> bool {
+        return self.table[self.control_stack_top].reduces.iter().any(|reduce| reduce.rule_name_op.is_none());
+    }
+
+    pub fn advance(&mut self, sym: &S, value_op: Option<Box<dyn Any>>) -> Result<bool, String>
+    where
+        S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
+    {
+        loop {
+            let state = &self.table[self.control_stack_top];
+            let shift_op = state.shifts.get(sym).map(|x| *x);
+            let reduces: Vec<Reduce<S>> = state.reduces.iter().map(Reduce::clone).filter(|reduce| reduce.lookahead == *sym).collect();
+            if shift_op.is_some() && !reduces.is_empty() {
+                return Err("Shift/Reduce error.".to_owned());
+            } else if reduces.len() > 1 {
+                return Err("Reduce/Reduce error.".to_owned());
+            } else if shift_op.is_none() && reduces.is_empty() {
+                let mut expected: HashSet<S> = HashSet::new();
+                for shift_key in state.shifts.keys() {
+                    expected.insert(S::clone(shift_key));
+                }
+                for reduce in &state.reduces {
+                    expected.insert(S::clone(&reduce.lookahead));
+                }
+                let mut expected: Vec<S> = expected.drain().collect();
+                expected.sort();
+                let mut msg = String::new();
+                msg += "Expected one of ";
+                let mut first = true;
+                for sym2 in expected {
+                    if first {
+                        first = false;
+                    } else {
+                        msg += ", ";
+                    }
+                    msg += &format!("{}", sym2);
+                }
+                return Err(msg);
+            }
+            if let Some(shift) = shift_op {
+                self.push_control(shift);
+                if let Some(value) = value_op {
+                    self.value_stack.push(value);
+                }
+                break;
+            } else if reduces.len() == 1 {
+                let reduce = &reduces[0];
+                for _i in 0..reduce.consume_count {
+                    self.pop_control();
+                }
+                if let Some(effect) = &reduce.effect_op {
+                    effect.borrow_mut()(&mut self.value_stack);
+                }
+                if reduce.rule_name_op.is_none() {
+                    break;
+                }
+            }
+        }
+        Ok(self.is_finished())
+    }
 }
 
 #[test]
