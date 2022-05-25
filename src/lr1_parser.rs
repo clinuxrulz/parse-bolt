@@ -233,44 +233,39 @@ where
     result
 }
 
-fn first<S>(cache: &mut HashMap<Option<S>,HashSet<S>>, grammar: &Grammar<S>, lexemes: &Vec<S>, empty: &HashSet<S>, sym_op: &Option<S>) -> HashSet<S> where S: Clone + PartialEq + Eq + std::hash::Hash {
-    if let Some(r) = cache.get(sym_op) {
-        return HashSet::clone(r);
+fn make_first_table<S>(grammar: &Grammar<S>, lexemes: &Vec<S>, empty: &HashSet<S>) -> HashMap<Option<S>,HashSet<S>> where S: Clone + PartialEq + Eq + std::hash::Hash {
+    let mut result: HashMap<Option<S>,HashSet<S>> = HashMap::new();
+    fn add_to_result<S>(result: &mut HashMap<Option<S>,HashSet<S>>, key: Option<S>, item: S) -> bool
+    where
+        S: Clone + PartialEq + Eq + std::hash::Hash,
+    {
+        if let Some(tmp) = result.get_mut(&key) {
+            return tmp.insert(item);
+        } else {
+            let mut tmp = HashSet::new();
+            tmp.insert(item);
+            result.insert(key, tmp);
+            return true;
+        }
     }
-    let mut result = HashSet::new();
-    for rule in grammar {
-        if rule.name_op == *sym_op {
-            for part in &rule.parts {
-                if sym_op.as_ref().map_or(false, |sym| *part == *sym) {
-                    break;
-                }
+    loop {
+        let mut again = false;
+        for rule in grammar {
+            for k in 0..rule.parts.len() {
+                let part = &rule.parts[k];
                 if lexemes.contains(part) {
-                    result.insert(S::clone(part));
-                    break;
-                }
-                let tmp = first(cache, grammar, lexemes, empty, &Some(S::clone(part)));
-                for x in tmp {
-                    result.insert(x);
+                    again |= add_to_result(&mut result, Option::clone(&rule.name_op), S::clone(part));
                 }
                 if !empty.contains(part) {
                     break;
                 }
             }
         }
-    }
-    cache.insert(Option::clone(sym_op), HashSet::clone(&result));
-    result
-}
-
-fn make_first_table<S>(grammar: &Grammar<S>, lexemes: &Vec<S>, empty: &HashSet<S>) -> HashMap<Option<S>,HashSet<S>> where S: Clone + PartialEq + Eq + std::hash::Hash {
-    let mut result: HashMap<Option<S>,HashSet<S>> = HashMap::new();
-    for rule in grammar {
-        let sym_op = &rule.name_op;
-        if !result.contains_key(sym_op) {
-            first(&mut result, grammar, lexemes, empty, sym_op);
+        if !again {
+            break;
         }
     }
-    return result;
+    result
 }
 
 fn make_follow_table<S>(grammar: &Grammar<S>, lexemes: &Vec<S>, first: &HashMap<Option<S>,HashSet<S>>) -> HashMap<Option<S>,HashSet<S>> where S: Clone + PartialEq + Eq + std::hash::Hash {
