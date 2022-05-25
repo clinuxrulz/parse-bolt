@@ -255,6 +255,7 @@ fn make_first_table<S>(grammar: &Grammar<S>, lexemes: &Vec<S>, empty: &HashSet<S
                 let part = &rule.parts[k];
                 if lexemes.contains(part) {
                     again |= add_to_result(&mut result, Option::clone(&rule.name_op), S::clone(part));
+                    break;
                 }
                 if !empty.contains(part) {
                     break;
