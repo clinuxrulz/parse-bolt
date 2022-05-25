@@ -712,6 +712,7 @@ fn test_parser_many0() {
     let _ = parser_runner.advance(Token('A'));
     let _ = parser_runner.advance(Token('A'));
     let _ = parser_runner.advance(Token('$'));
+    let _ = parser_runner.advance(Token('$'));
     if parser_runner.is_finished() {
         println!("{:?}", parser_runner.get_result());
     } else {
