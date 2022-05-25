@@ -288,18 +288,20 @@ fn make_follow_table<S>(grammar: &Grammar<S>, lexemes: &Vec<S>, first: &HashMap<
     add_to_result(&mut result, None, S::clone(&grammar[0].parts[grammar[0].parts.len()-1]));
     //
     for rule in grammar {
-        for k in 0..rule.parts.len()-1 {
-            let part_k = &rule.parts[k];
-            if lexemes.contains(part_k) {
-                continue;
-            }
-            let part_k_plus_1 = &rule.parts[k + 1];
-            if lexemes.contains(part_k_plus_1) {
-                add_to_result(&mut result, Some(S::clone(part_k)), S::clone(part_k_plus_1));
-            } else {
-                if let Some(tmp) = first.get(&Some(S::clone(part_k_plus_1))) {
-                    for tmp2 in tmp {
-                        add_to_result(&mut result, Some(S::clone(part_k)), S::clone(tmp2));
+        if !rule.parts.is_empty() {
+            for k in 0..rule.parts.len()-1 {
+                let part_k = &rule.parts[k];
+                if lexemes.contains(part_k) {
+                    continue;
+                }
+                let part_k_plus_1 = &rule.parts[k + 1];
+                if lexemes.contains(part_k_plus_1) {
+                    add_to_result(&mut result, Some(S::clone(part_k)), S::clone(part_k_plus_1));
+                } else {
+                    if let Some(tmp) = first.get(&Some(S::clone(part_k_plus_1))) {
+                        for tmp2 in tmp {
+                            add_to_result(&mut result, Some(S::clone(part_k)), S::clone(tmp2));
+                        }
                     }
                 }
             }
