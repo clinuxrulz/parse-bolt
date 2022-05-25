@@ -173,26 +173,6 @@ impl<'a, S: std::fmt::Display> std::fmt::Display for GrammarRefPrefixAndItemSetR
     }
 }
 
-
-fn create_initial_itemset<S>(grammar: &Grammar<S>, eof_sym: S) -> ItemSet<S>
-where
-    S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord,
-{
-    let mut result = ItemSet::new();
-    let mut rule_idx: usize = 0;
-    for rule in grammar {
-        if rule.name_op.is_none() {
-            result.insert(Item {
-                rule: rule_idx,
-                index: 0,
-                lookahead: S::clone(&eof_sym),
-            });
-        }
-        rule_idx += 1;
-    }
-    result
-}
-
 fn find_lexemes<S>(grammar: &Grammar<S>) -> Vec<S> where S: Clone + PartialEq + PartialOrd + Ord {
     let mut result = Vec::new();
     for rule in grammar {
@@ -461,7 +441,7 @@ where
     result
 }
 
-fn make_table<S>(grammar: &Grammar<S>, lexemes: &Lexemes<S>, first: &HashMap<Option<S>,HashSet<S>>, follow: &HashMap<Option<S>,HashSet<S>>, start: &Item<S>) -> Table<S>
+fn make_table_<S>(grammar: &Grammar<S>, lexemes: &Lexemes<S>, first: &HashMap<Option<S>,HashSet<S>>, follow: &HashMap<Option<S>,HashSet<S>>, start: &Item<S>) -> Table<S>
 where
     S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
 {
@@ -519,6 +499,29 @@ where
     result
 }
 
+pub fn make_table<S>(grammar: &Grammar<S>, eof_sym: S) -> Table<S>
+where
+    S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
+{
+    let lexemes = find_lexemes(&grammar);
+    let empty = make_empty_set(&grammar, &lexemes);
+    let first = make_first_table(&grammar, &lexemes, &empty);
+    let follow = make_follow_table(&grammar, &lexemes, &first);
+    let mut start_op: Option<Item<S>> = None;
+    for rule_idx in 0..grammar.len() {
+        let rule = &grammar[rule_idx];
+        if rule.name_op.is_none() {
+            start_op = Some(Item {
+                rule: rule_idx,
+                index: 0,
+                lookahead: S::clone(&eof_sym)
+            });
+            break;
+        }
+    }
+    make_table_(grammar, &lexemes, &first, &follow, &start_op.expect("start grammar rule not found."))
+}
+
 #[test]
 fn test_lr1_parser() {
     let grammar = vec![
@@ -574,7 +577,7 @@ fn test_lr1_parser() {
     println!("Empty Set: {:?}", empty);
     println!("First: {:#?}", first);
     println!("Follow: {:#?}", follow);
-    let table = make_table(&grammar, &lexemes, &first, &follow, &Item { rule: 0, index: 0, lookahead: "$", });
+    let table = make_table_(&grammar, &lexemes, &first, &follow, &Item { rule: 0, index: 0, lookahead: "$", });
     println!("Table:");
     for i in 0..table.len() {
         println!("  {}: {:?}", i, table[i]);

@@ -3,7 +3,7 @@
 pub mod adt;
 pub mod kotlin;
 pub mod lr_parser;
-mod lr1_parser;
+pub mod lr1_parser;
 //mod parser;
 mod parser2;
 pub mod parser3;
