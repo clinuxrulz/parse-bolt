@@ -11,6 +11,16 @@ pub struct Rule<S> {
     effect_op: Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>,
 }
 
+impl<S> Rule<S> {
+    pub fn new(name_op: Option<S>, parts: Vec<S>, effect_op: Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>) -> Rule<S> {
+        Rule {
+            name_op,
+            parts,
+            effect_op,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Item<S> {
     rule: usize,
@@ -523,6 +533,7 @@ where
     make_table_(grammar, &lexemes, &first, &follow, &start_op.expect("start grammar rule not found."))
 }
 
+#[derive(Debug)]
 pub struct Lr1Parser<S> {
     table: Table<S>,
     control_stack_top: usize,

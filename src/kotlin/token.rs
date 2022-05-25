@@ -149,7 +149,7 @@ pub enum Number {
     Long(i64),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum KTokenClass {
     Id,
     Number,

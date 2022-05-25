@@ -44,30 +44,27 @@ pub struct ParserRunner<Err, T, TC, A> {
     phantom_err: PhantomData<Err>,
     phantom_t: PhantomData<T>,
     phantom_a: PhantomData<A>,
-    lr_parser: crate::lr_parser::LrParser<RuleOrToken<TC>>,
+    lr1_parser: crate::lr1_parser::Lr1Parser<RuleOrToken<TC>>,
     result_fetched: bool,
 }
 
 impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
-    pub fn advance(&mut self, token_op: Option<T>) -> Result<bool, Err>
+    pub fn advance(&mut self, token: T) -> Result<bool, Err>
     where
         Err: From<String>,
         T: TokenClass<Result = TC> + 'static,
-        TC: Clone + PartialEq + Eq + std::hash::Hash,
+        TC: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
     {
-        self.lr_parser
+        self.lr1_parser
             .advance(
-                token_op
-                    .as_ref()
-                    .map(T::token_class)
-                    .map(RuleOrToken::Token),
-                token_op.map(|token| Box::new(token) as Box<dyn Any>),
+                &RuleOrToken::Token(token.token_class()),
+                Some(Box::new(token) as Box<dyn Any>),
             )
             .map_err(Err::from)
     }
 
     pub fn is_finished(&self) -> bool {
-        self.lr_parser.is_finished()
+        self.lr1_parser.is_finished()
     }
 
     pub fn get_result(&mut self) -> A
@@ -78,7 +75,7 @@ impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
             panic!("Result already extracted.");
         }
         let result: Box<A> = self
-            .lr_parser
+            .lr1_parser
             .get_value_stack_mut()
             .pop()
             .unwrap()
@@ -104,31 +101,21 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         }
     }
 
-    pub fn compile(&self) -> ParserRunner<Err, T, TC, A>
+    pub fn compile(&self, eof_sym: &TC) -> ParserRunner<Err, T, TC, A>
     where
-        TC: Clone + std::fmt::Debug + std::fmt::Display + PartialEq + Eq + std::hash::Hash,
+        TC: Clone + std::fmt::Debug + std::fmt::Display + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord,
     {
         let grammar = self.base.generate_grammar();
-        let lexemes = self
-            .base
-            .find_lexemes()
-            .drain(0..)
-            .map(RuleOrToken::Token)
-            .collect();
         for rule in &grammar {
             println!("{}", rule);
         }
-        let lr_parser_tg = crate::lr_parser::LrParserTableGenerator::new(
-            crate::lr_parser::Grammar(grammar),
-            crate::lr_parser::Lexemes(lexemes),
-        );
-        let table = lr_parser_tg.generate_table();
-        let lr_parser = crate::lr_parser::LrParser::new(table);
+        let table = crate::lr1_parser::make_table(&grammar, &RuleOrToken::Token(TC::clone(eof_sym)));
+        let lr1_parser = crate::lr1_parser::Lr1Parser::new(table);
         ParserRunner {
             phantom_err: PhantomData,
             phantom_t: PhantomData,
             phantom_a: PhantomData,
-            lr_parser,
+            lr1_parser: lr1_parser,
             result_fetched: false,
         }
     }
@@ -350,7 +337,7 @@ impl<S> GrammarNameGen<S> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum RuleOrToken<S> {
     Rule(usize),
     Token(S),
@@ -517,24 +504,24 @@ impl<S: Clone> Clone for ParserBase<S> {
 }
 
 impl<S> ParserBase<S> {
-    fn generate_grammar(&self) -> Vec<crate::lr_parser::Rule<RuleOrToken<S>>>
+    fn generate_grammar(&self) -> Vec<crate::lr1_parser::Rule<RuleOrToken<S>>>
     where
         S: Clone + PartialEq + Eq + std::hash::Hash,
     {
         let mut name_gen = GrammarNameGen::new();
         let mut rules = Vec::new();
-        let gap = crate::lr_parser::Rule::new(None, Vec::new(), None);
+        let gap = crate::lr1_parser::Rule::new(None, Vec::new(), None);
         rules.push(gap);
         let mut fix_point_map = HashMap::new();
         self.generate_grammar_(&mut name_gen, &mut rules, &mut fix_point_map);
-        rules[0] = crate::lr_parser::Rule::new(None, vec![name_gen.gen_name(self, &mut fix_point_map).0], None);
+        rules[0] = crate::lr1_parser::Rule::new(None, vec![name_gen.gen_name(self, &mut fix_point_map).0], None);
         rules
     }
 
     fn generate_grammar_(
         &self,
         name_gen: &mut GrammarNameGen<S>,
-        rules_out: &mut Vec<crate::lr_parser::Rule<RuleOrToken<S>>>,
+        rules_out: &mut Vec<crate::lr1_parser::Rule<RuleOrToken<S>>>,
         fix_point_map: &mut HashMap<ParserReferenceName,RuleOrToken<S>>,
     ) where
         S: Clone + PartialEq + Eq + std::hash::Hash,
@@ -547,7 +534,7 @@ impl<S> ParserBase<S> {
                     return;
                 }
                 let gap_idx = rules_out.len();
-                let gap = crate::lr_parser::Rule::new(None, Vec::new(), None);
+                let gap = crate::lr1_parser::Rule::new(None, Vec::new(), None);
                 rules_out.push(gap);
                 let mut parts = Vec::new();
                 for parser in parsers {
@@ -555,7 +542,7 @@ impl<S> ParserBase<S> {
                     let (part, _) = name_gen.gen_name(parser, fix_point_map);
                     parts.push(part);
                 }
-                let rule = crate::lr_parser::Rule::new(
+                let rule = crate::lr1_parser::Rule::new(
                     Some(name),
                     parts,
                     None, // <-- effect is none because we are gonna leave all results on the stack for the AndThenEffect of from Parser::seq to manage.
@@ -570,7 +557,7 @@ impl<S> ParserBase<S> {
                 for parser in parsers {
                     parser.generate_grammar_(name_gen, rules_out, fix_point_map);
                     let (choice_name, _) = name_gen.gen_name(parser, fix_point_map);
-                    let rule = crate::lr_parser::Rule::new(
+                    let rule = crate::lr1_parser::Rule::new(
                         Some(RuleOrToken::clone(&name)),
                         vec![choice_name],
                         None,
@@ -584,11 +571,11 @@ impl<S> ParserBase<S> {
                     return;
                 }
                 let gap_idx = rules_out.len();
-                let gap = crate::lr_parser::Rule::new(None, Vec::new(), None);
+                let gap = crate::lr1_parser::Rule::new(None, Vec::new(), None);
                 rules_out.push(gap);
                 parser.generate_grammar_(name_gen, rules_out, fix_point_map);
                 let (inner_name, _) = name_gen.gen_name(parser, fix_point_map);
-                rules_out[gap_idx] = crate::lr_parser::Rule::new(
+                rules_out[gap_idx] = crate::lr1_parser::Rule::new(
                     Some(name),
                     vec![inner_name],
                     Some(Rc::clone(effect)),
@@ -604,12 +591,12 @@ impl<S> ParserBase<S> {
                 }
                 fix_point_map.insert(ParserReferenceName::clone(ref_name), RuleOrToken::clone(&name));
                 let gap_idx = rules_out.len();
-                let gap = crate::lr_parser::Rule::new(None, Vec::new(), None);
+                let gap = crate::lr1_parser::Rule::new(None, Vec::new(), None);
                 rules_out.push(gap);
                 parser.generate_grammar_(name_gen, rules_out, fix_point_map);
                 let (inner_name, _) = name_gen.gen_name(&*parser, fix_point_map);
                 rules_out[gap_idx] =
-                    crate::lr_parser::Rule::new(Some(name), vec![inner_name], None);
+                    crate::lr1_parser::Rule::new(Some(name), vec![inner_name], None);
             }
         }
     }
@@ -665,18 +652,11 @@ fn test_combinator_to_grammar() {
     };
     let rules = combinator.generate_grammar();
     println!("Rules:");
-    println!("{:?}", rules);
+    for i in 0..rules.len() {
+        println!("  {}: {}", i, rules[i]);
+    }
     println!();
-    let table_generator = crate::lr_parser::LrParserTableGenerator::new(
-        crate::lr_parser::Grammar(rules),
-        crate::lr_parser::Lexemes(vec![
-            RuleOrToken::Token('A'),
-            RuleOrToken::Token('B'),
-            RuleOrToken::Token('C'),
-            RuleOrToken::Token('D'),
-        ]),
-    );
-    let table = table_generator.generate_table();
+    let table = crate::lr1_parser::make_table(&rules, &RuleOrToken::Token('$'));
     println!("Parser Table:");
     println!("{:?}", table);
 }
@@ -697,11 +677,11 @@ fn test_build_parser() {
             &Parser::match_('C'),
             &Parser::match_('D'),
         ]));
-    let mut parser_runner = parser.compile();
-    let _ = parser_runner.advance(Some(Token('A')));
-    let _ = parser_runner.advance(Some(Token('B')));
-    let _ = parser_runner.advance(Some(Token('C')));
-    let _ = parser_runner.advance(None);
+    let mut parser_runner = parser.compile(&'$');
+    let _ = parser_runner.advance(Token('A'));
+    let _ = parser_runner.advance(Token('B'));
+    let _ = parser_runner.advance(Token('C'));
+    let _ = parser_runner.advance(Token('$'));
     if parser_runner.is_finished() {
         println!("{:?}", parser_runner.get_result());
     } else {
@@ -720,11 +700,11 @@ fn test_parser_many0() {
         }
     }
     let parser: Parser<String, Token, char, _> = Parser::match_('A').many0();
-    let mut parser_runner = parser.compile();
-    println!("{:#?}", parser_runner.lr_parser);
-    let _ = parser_runner.advance(Some(Token('A')));
-    let _ = parser_runner.advance(Some(Token('A')));
-    let _ = parser_runner.advance(None);
+    let mut parser_runner = parser.compile(&'$');
+    println!("{:#?}", parser_runner.lr1_parser);
+    let _ = parser_runner.advance(Token('A'));
+    let _ = parser_runner.advance(Token('A'));
+    let _ = parser_runner.advance(Token('$'));
     if parser_runner.is_finished() {
         println!("{:?}", parser_runner.get_result());
     } else {

@@ -6,22 +6,18 @@ use crate::kotlin::token_stream::TokenStream;
 use crate::parser3::Parser;
 
 fn run_parser<A: std::fmt::Debug + 'static>(parser: &Parser<String, Token, KTokenClass, A>, code: &str) -> Result<A, String> {
-    let mut runner = parser.compile();
+    let mut runner = parser.compile(&KTokenClass::EOF);
     println!("runner: {:#?}", runner);
     let source = Source::from_str(code);
     let source_cursor = SourceCursor::new(source);
     let mut token_stream = TokenStream::new(source_cursor);
     loop {
         match token_stream.next() {
-            Ok((token, byte_span)) => {
-                match token {
-                    Token::EOF => {
-                        runner.advance(None)?;
-                        break;
-                    }
-                    _ => {
-                        runner.advance(Some(token))?;
-                    }
+            Ok((token, _byte_span)) => {
+                let was_eof = token == Token::EOF;
+                let _in_done_state = runner.advance(token)?;
+                if was_eof {
+                    break;
                 }
             },
             Err(err) => {
