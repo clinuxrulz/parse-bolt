@@ -46,21 +46,6 @@ pub type Grammar<S> = Vec<Rule<S>>;
 
 pub type Lexemes<S> = Vec<S>;
 
-pub enum ShiftOrReduce<S> {
-    Shift(usize),
-    Reduce(usize, Option<S>, Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>),
-}
-
-impl<S: std::fmt::Debug> std::fmt::Debug for ShiftOrReduce<S> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Shift(arg0) => f.debug_tuple("Shift").field(arg0).finish(),
-            Self::Reduce(arg0, arg1, arg2) =>
-                f.debug_tuple("Reduce").field(arg0).field(arg1).finish(),
-        }
-    }
-}
-
 pub struct Reduce<S> {
     lookahead: S,
     rule_name_op: Option<S>,
