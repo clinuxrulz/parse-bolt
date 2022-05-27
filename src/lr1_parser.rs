@@ -444,11 +444,12 @@ where
     let mut result = ItemSet::new();
     for item in &item_set.0 {
         let rule = &grammar[item.rule];
-        if item.index < rule.parts.len() {
-            if rule.parts[item.index] == *sym {
+        for k in item.index..rule.parts.len() {
+            let part = &rule.parts[k];
+            if *part == *sym {
                 let item = Item {
                     rule: item.rule,
-                    index: item.index + 1,
+                    index: k + 1,
                     lookahead: S::clone(&item.lookahead),
                 };
                 for item in closure(grammar, lexemes, empty, first, follow, &item).0 {
@@ -605,6 +606,7 @@ impl<S> Lr1Parser<S> {
         S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
     {
         loop {
+            println!("control: {}", self.control_stack_top);
             let state = &self.table[self.control_stack_top];
             let shift_op = state.shifts.get(sym).map(|x| *x);
             let reduces: Vec<Reduce<S>> = state.reduces.iter().map(Reduce::clone).filter(|reduce| reduce.lookahead == *sym).collect();
