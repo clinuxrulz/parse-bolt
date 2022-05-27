@@ -419,15 +419,19 @@ where
     result
 }
 
-fn edges<S>(grammar: &Grammar<S>, item_set: &ItemSet<S>) -> HashSet<S>
+fn edges<S>(grammar: &Grammar<S>, empty_set: &HashSet<S>, item_set: &ItemSet<S>) -> HashSet<S>
 where
     S: Clone + PartialEq + Eq + std::hash::Hash
 {
     let mut result = HashSet::new();
     for item in &item_set.0 {
         let rule = &grammar[item.rule];
-        if item.index < rule.parts.len() {
-            result.insert(S::clone(&rule.parts[item.index]));
+        for k in item.index..rule.parts.len() {
+            let part = &rule.parts[k];
+            result.insert(S::clone(part));
+            if !empty_set.contains(part) {
+                break;
+            }
         }
     }
     result
@@ -477,7 +481,7 @@ where
             prefix: format!("State {}", state),
             item_set_ref: &item_set,
         });
-        let edges = edges(grammar, &item_set);
+        let edges = edges(grammar, empty, &item_set);
         for edge in edges {
             let next_item_set = goto(grammar, lexemes, empty, first, follow, &item_set, &edge);
             stack.push(next_item_set);
@@ -486,7 +490,7 @@ where
     let mut table: HashMap<usize,State<S>> = HashMap::new();
     for item_set in states.keys() {
         let state_idx = states.get(item_set).unwrap();
-        let edges = edges(grammar, item_set);
+        let edges = edges(grammar, empty, item_set);
         let mut state = State::new();
         for edge in edges {
             let next_item_set = goto(grammar, lexemes, empty, first, follow, item_set, &edge);
@@ -650,10 +654,8 @@ impl<S> Lr1Parser<S> {
                     break;
                 }
                 let state = &self.table[self.control_stack_top];
-                let control_op = state.shifts.get(reduce.rule_name_op.as_ref().unwrap()).map(|x| *x);
-                if let Some(control) = control_op {
-                    self.push_control(control);
-                }
+                let control = *state.shifts.get(reduce.rule_name_op.as_ref().unwrap()).unwrap();
+                self.push_control(control);
             }
         }
         Ok(self.is_finished())
