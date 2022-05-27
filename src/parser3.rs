@@ -202,10 +202,15 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         TC: 'static,
         A: 'static,
     {
-        return self.many0().seq2(self).map(|(mut xs, x)| {
-            xs.push(x);
-            xs
-        });
+        Parser::fix_point(|result: &Parser<Err, T, TC, Vec<A>>| {
+            Parser::choice(vec![
+                &self.map(|x| vec![x]),
+                &result.seq2(self).map(|(mut xs, x)| {
+                    xs.push(x);
+                    xs
+                }),
+            ])
+        })
     }
 
     pub fn many0(&self) -> Parser<Err, T, TC, Vec<A>>
@@ -215,15 +220,10 @@ impl<Err, T, TC, A> Parser<Err, T, TC, A> {
         TC: 'static,
         A: 'static,
     {
-        Parser::fix_point(|result: &Parser<Err, T, TC, Vec<A>>| {
-            Parser::choice(vec![
-                &Parser::empty().map(|_| Vec::new()),
-                &result.seq2(self).map(|(mut xs, x)| {
-                    xs.push(x);
-                    xs
-                }),
-            ])
-        })
+        Parser::choice(vec![
+            &Parser::empty().map(|_| Vec::new()),
+            &self.many1()
+        ])
     }
 
     pub fn many1_sep<B>(&self, sep: &Parser<Err, T, TC, B>) -> Parser<Err, T, TC, Vec<A>>
