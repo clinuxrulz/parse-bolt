@@ -426,12 +426,9 @@ where
     let mut result = HashSet::new();
     for item in &item_set.0 {
         let rule = &grammar[item.rule];
-        for k in item.index..rule.parts.len() {
-            let part = &rule.parts[k];
+        if item.index < rule.parts.len() {
+            let part = &rule.parts[item.index];
             result.insert(S::clone(part));
-            if !empty_set.contains(part) {
-                break;
-            }
         }
     }
     result
@@ -444,20 +441,17 @@ where
     let mut result = ItemSet::new();
     for item in &item_set.0 {
         let rule = &grammar[item.rule];
-        for k in item.index..rule.parts.len() {
-            let part = &rule.parts[k];
+        if item.index < rule.parts.len() {
+            let part = &rule.parts[item.index];
             if *part == *sym {
                 let item = Item {
                     rule: item.rule,
-                    index: k + 1,
+                    index: item.index + 1,
                     lookahead: S::clone(&item.lookahead),
                 };
                 for item in closure(grammar, lexemes, empty, first, follow, &item).0 {
                     result.insert(item);
                 }
-            }
-            if !empty.contains(part) {
-                break;
             }
         }
     }
