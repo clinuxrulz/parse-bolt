@@ -346,6 +346,15 @@ where
             continue;
         }
         let rule = &grammar[item.rule];
+        if item.index < rule.parts.len() {
+            if empty.contains(&rule.parts[item.index]) {
+                stack.push(Item {
+                    rule: item.rule,
+                    index: item.index + 1,
+                    lookahead: S::clone(&item.lookahead),
+                });
+            }
+        }
         for k in item.index..rule.parts.len()+1 {
             if k < rule.parts.len() {
                 let at_part = &rule.parts[k];
