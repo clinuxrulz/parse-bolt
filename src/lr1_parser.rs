@@ -650,8 +650,10 @@ impl<S> Lr1Parser<S> {
                     break;
                 }
                 let state = &self.table[self.control_stack_top];
-                let control = *state.shifts.get(reduce.rule_name_op.as_ref().unwrap()).expect(&format!("Failed to get shift for {} at state {}", reduce.rule_name_op.as_ref().unwrap(), self.control_stack_top));
-                self.push_control(control);
+                let control_op = state.shifts.get(reduce.rule_name_op.as_ref().unwrap()).map(|x| *x);
+                if let Some(control) = control_op {
+                    self.push_control(control);
+                }
             }
         }
         Ok(self.is_finished())
