@@ -706,10 +706,15 @@ fn test_parser_many0() {
             return self.0;
         }
     }
-    let parser: Parser<String, Token, char, _> = Parser::match_('A').many0();
+    let parser: Parser<String, Token, char, _> =
+        Parser::match_('A').seq2(
+            &Parser::match_(',')
+                .seq_right(&Parser::match_('A'))
+                .many0()
+        );
     let mut parser_runner = parser.compile(&'$');
-    println!("{:#?}", parser_runner.lr1_parser);
     let _ = parser_runner.advance(Token('A'));
+    let _ = parser_runner.advance(Token(','));
     let _ = parser_runner.advance(Token('A'));
     let _ = parser_runner.advance(Token('$'));
     let _ = parser_runner.advance(Token('$'));

@@ -333,7 +333,7 @@ fn make_follow_table<S>(grammar: &Grammar<S>, lexemes: &Vec<S>, first: &HashMap<
     result
 }
 
-fn closure<S>(grammar: &Grammar<S>, lexemes: &Lexemes<S>, first: &HashMap<Option<S>,HashSet<S>>, follow: &HashMap<Option<S>,HashSet<S>>, item: &Item<S>) -> ItemSet<S>
+fn closure<S>(grammar: &Grammar<S>, lexemes: &Lexemes<S>, empty: &HashSet<S>, first: &HashMap<Option<S>,HashSet<S>>, follow: &HashMap<Option<S>,HashSet<S>>, item: &Item<S>) -> ItemSet<S>
 where
     S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord,
 {
@@ -346,65 +346,72 @@ where
             continue;
         }
         let rule = &grammar[item.rule];
-        if item.index < rule.parts.len() {
-            let at_part = &rule.parts[item.index];
-            if lexemes.contains(at_part) {
-                // do nothing
-            } else if item.index < rule.parts.len() - 1 {
-                let at_next_part = &rule.parts[item.index + 1];
-                if lexemes.contains(at_next_part) {
-                    let lookahead = at_next_part;
-                    let mut rule_idx: usize = 0;
-                    for rule in grammar {
-                        if rule.name_op.as_ref().map_or(false, |name| *name == *at_part) {
-                            stack.push(Item {
-                                rule: rule_idx,
-                                index: 0,
+        for k in item.index..rule.parts.len()+1 {
+            if k < rule.parts.len() {
+                let at_part = &rule.parts[k];
+                if lexemes.contains(at_part) {
+                    break;
+                } else if k < rule.parts.len() - 1 {
+                    let at_next_part = &rule.parts[k + 1];
+                    if lexemes.contains(at_next_part) {
+                        let lookahead = at_next_part;
+                        let mut rule_idx: usize = 0;
+                        for rule in grammar {
+                            if rule.name_op.as_ref().map_or(false, |name| *name == *at_part) {
+                                stack.push(Item {
+                                    rule: rule_idx,
+                                    index: 0,
+                                    lookahead: S::clone(lookahead),
+                                });
+                            }
+                            rule_idx += 1;
+                        }
+                    } else {
+                        let lookaheads_op = first.get(&Some(S::clone(at_next_part)));
+                        if let Some(lookaheads) = lookaheads_op {
+                            let mut rule_idx: usize = 0;
+                            for rule in grammar {
+                                if rule.name_op.as_ref().map_or(false, |name| *name == *at_part) {
+                                    for lookahead in lookaheads {
+                                        stack.push(Item {
+                                            rule: rule_idx,
+                                            index: 0,
+                                            lookahead: S::clone(lookahead),
+                                        });
+                                    }
+                                }
+                                rule_idx += 1;
+                            }
+                        }
+                    }
+                } else {
+                    let lookaheads = follow.get(&rule.name_op).unwrap();
+                    if lexemes.contains(at_part) {
+                        for lookahead in lookaheads {
+                            result.insert(Item {
+                                rule: item.rule,
+                                index: item.index,
                                 lookahead: S::clone(lookahead),
                             });
                         }
-                        rule_idx += 1;
-                    }
-                } else {
-                    let lookaheads = first.get(&Some(S::clone(at_next_part))).unwrap();
-                    let mut rule_idx: usize = 0;
-                    for rule in grammar {
-                        if rule.name_op.as_ref().map_or(false, |name| *name == *at_part) {
-                            for lookahead in lookaheads {
-                                stack.push(Item {
-                                    rule: rule_idx,
-                                    index: 0,
-                                    lookahead: S::clone(lookahead),
-                                });
+                    } else {
+                        let mut rule_idx: usize = 0;
+                        for rule in grammar {
+                            if rule.name_op.as_ref().map_or(false, |name| *name == *at_part) {
+                                for lookahead in lookaheads {
+                                    stack.push(Item {
+                                        rule: rule_idx,
+                                        index: 0,
+                                        lookahead: S::clone(lookahead),
+                                    });
+                                }
                             }
+                            rule_idx += 1;
                         }
-                        rule_idx += 1;
                     }
                 }
-            } else {
-                let lookaheads = follow.get(&rule.name_op).unwrap();
-                if lexemes.contains(at_part) {
-                    for lookahead in lookaheads {
-                        result.insert(Item {
-                            rule: item.rule,
-                            index: item.index,
-                            lookahead: S::clone(lookahead),
-                        });
-                    }
-                } else {
-                    let mut rule_idx: usize = 0;
-                    for rule in grammar {
-                        if rule.name_op.as_ref().map_or(false, |name| *name == *at_part) {
-                            for lookahead in lookaheads {
-                                stack.push(Item {
-                                    rule: rule_idx,
-                                    index: 0,
-                                    lookahead: S::clone(lookahead),
-                                });
-                            }
-                        }
-                        rule_idx += 1;
-                    }
+                if !empty.contains(&rule.parts[k]) {
+                    break;
                 }
             }
         }
@@ -426,7 +433,7 @@ where
     result
 }
 
-fn goto<S>(grammar: &Grammar<S>, lexemes: &Lexemes<S>, first: &HashMap<Option<S>,HashSet<S>>, follow: &HashMap<Option<S>,HashSet<S>>, item_set: &ItemSet<S>, sym: &S) -> ItemSet<S>
+fn goto<S>(grammar: &Grammar<S>, lexemes: &Lexemes<S>, empty: &HashSet<S>, first: &HashMap<Option<S>,HashSet<S>>, follow: &HashMap<Option<S>,HashSet<S>>, item_set: &ItemSet<S>, sym: &S) -> ItemSet<S>
 where
     S: Clone + PartialEq + std::hash::Hash + PartialOrd + Ord,
 {
@@ -440,7 +447,7 @@ where
                     index: item.index + 1,
                     lookahead: S::clone(&item.lookahead),
                 };
-                for item in closure(grammar, lexemes, first, follow, &item).0 {
+                for item in closure(grammar, lexemes, empty, first, follow, &item).0 {
                     result.insert(item);
                 }
             }
@@ -449,14 +456,14 @@ where
     result
 }
 
-fn make_table_<S>(grammar: &Grammar<S>, lexemes: &Lexemes<S>, first: &HashMap<Option<S>,HashSet<S>>, follow: &HashMap<Option<S>,HashSet<S>>, start: &Item<S>) -> Table<S>
+fn make_table_<S>(grammar: &Grammar<S>, lexemes: &Lexemes<S>, empty: &HashSet<S>, first: &HashMap<Option<S>,HashSet<S>>, follow: &HashMap<Option<S>,HashSet<S>>, start: &Item<S>) -> Table<S>
 where
-    S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
+    S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display + std::fmt::Debug,
 {
     let mut states: HashMap<ItemSet<S>,usize> = HashMap::new();
     let mut stack = Vec::new();
     {
-        let item_set_0 = closure(grammar, lexemes, first, follow, start);
+        let item_set_0 = closure(grammar, lexemes, empty, first, follow, start);
         stack.push(item_set_0);
     }
     while let Some(item_set) = stack.pop() {
@@ -472,7 +479,7 @@ where
         });
         let edges = edges(grammar, &item_set);
         for edge in edges {
-            let next_item_set = goto(grammar, lexemes, first, follow, &item_set, &edge);
+            let next_item_set = goto(grammar, lexemes, empty, first, follow, &item_set, &edge);
             stack.push(next_item_set);
         }
     }
@@ -482,7 +489,7 @@ where
         let edges = edges(grammar, item_set);
         let mut state = State::new();
         for edge in edges {
-            let next_item_set = goto(grammar, lexemes, first, follow, item_set, &edge);
+            let next_item_set = goto(grammar, lexemes, empty, first, follow, item_set, &edge);
             let next_state_idx = states.get(&next_item_set).unwrap();
             state.shifts.insert(edge, *next_state_idx);
         }
@@ -505,15 +512,25 @@ where
         std::mem::swap(&mut tmp, table.get_mut(&i).unwrap());
         result.push(tmp);
     }
+    // debugging
+    {
+        let mut state_idx = 0;
+        for state in &result {
+            println!("  {}: {:?}", state_idx, state);
+            state_idx += 1;
+        }
+    }
+    //
     result
 }
 
 pub fn make_table<S>(grammar: &Grammar<S>, eof_sym: &S) -> Table<S>
 where
-    S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
+    S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display + std::fmt::Debug,
 {
     let lexemes = find_lexemes(&grammar);
     let empty = make_empty_set(&grammar, &lexemes);
+    println!("empty: {:?}", empty);
     let first = make_first_table(&grammar, &lexemes, &empty);
     let follow = make_follow_table(&grammar, &lexemes, &first);
     let mut start_op: Option<Item<S>> = None;
@@ -528,7 +545,7 @@ where
             break;
         }
     }
-    make_table_(grammar, &lexemes, &first, &follow, &start_op.expect("start grammar rule not found."))
+    make_table_(grammar, &lexemes, &empty, &first, &follow, &start_op.expect("start grammar rule not found."))
 }
 
 #[derive(Debug)]
@@ -553,7 +570,7 @@ impl<S> Lr1Parser<S> {
 
     pub fn from_grammar(grammar: &Grammar<S>, eof_sym: &S) -> Lr1Parser<S>
     where
-        S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
+        S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display + std::fmt::Debug,
     {
         Lr1Parser::new(make_table(grammar, eof_sym))
     }
@@ -633,7 +650,7 @@ impl<S> Lr1Parser<S> {
                     break;
                 }
                 let state = &self.table[self.control_stack_top];
-                let control = *state.shifts.get(reduce.rule_name_op.as_ref().unwrap()).unwrap();
+                let control = *state.shifts.get(reduce.rule_name_op.as_ref().unwrap()).expect(&format!("Failed to get shift for {} at state {}", reduce.rule_name_op.as_ref().unwrap(), self.control_stack_top));
                 self.push_control(control);
             }
         }
@@ -704,7 +721,7 @@ fn test_lr1_parser() {
     println!("Empty Set: {:?}", empty);
     println!("First: {:#?}", first);
     println!("Follow: {:#?}", follow);
-    let table = make_table_(&grammar, &lexemes, &first, &follow, &Item { rule: 0, index: 0, lookahead: "$", });
+    let table = make_table_(&grammar, &lexemes, &empty, &first, &follow, &Item { rule: 0, index: 0, lookahead: "$", });
     println!("Table:");
     for i in 0..table.len() {
         println!("  {}: {:?}", i, table[i]);
