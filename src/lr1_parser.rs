@@ -456,6 +456,9 @@ where
                     result.insert(item);
                 }
             }
+            if !empty.contains(part) {
+                break;
+            }
         }
     }
     result
