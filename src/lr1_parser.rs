@@ -609,7 +609,13 @@ impl<S> Lr1Parser<S> {
         S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
     {
         loop {
-            println!("control: {}", self.control_stack_top);
+            // Debugging
+            print!("control:");
+            for c in &self.control_stack {
+                print!(" {}", c);
+            }
+            println!(" {}", self.control_stack_top);
+            //
             let state = &self.table[self.control_stack_top];
             let shift_op = state.shifts.get(sym).map(|x| *x);
             let reduces: Vec<Reduce<S>> = state.reduces.iter().map(Reduce::clone).filter(|reduce| reduce.lookahead == *sym).collect();
