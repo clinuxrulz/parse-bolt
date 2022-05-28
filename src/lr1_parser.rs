@@ -761,11 +761,7 @@ fn test_lr1_parser_many1() {
         Rule {
             name_op: None,
             parts: vec!["Start", "$"],
-            effect_op: Some(Rc::new(RefCell::new(|value_stack: &mut Vec<Box<dyn Any>>| {
-                let rhs: i32 = *value_stack.pop().unwrap().downcast().ok().unwrap();
-                let lhs: i32 = *value_stack.pop().unwrap().downcast().ok().unwrap();
-                value_stack.push(Box::new((lhs, rhs)) as Box<dyn Any>);
-            }))),
+            effect_op: None,
         },
         Rule {
             name_op: Some("Start"),
@@ -775,7 +771,11 @@ fn test_lr1_parser_many1() {
         Rule {
             name_op: Some("Start"),
             parts: vec!["Start", ",", "A"],
-            effect_op: None,
+            effect_op: Some(Rc::new(RefCell::new(|value_stack: &mut Vec<Box<dyn Any>>| {
+                let rhs: String = *value_stack.pop().unwrap().downcast().ok().unwrap();
+                let lhs: String = *value_stack.pop().unwrap().downcast().ok().unwrap();
+                value_stack.push(Box::new(format!("({},{})", lhs, rhs)) as Box<dyn Any>);
+            }))),
         },
     ];
     let lexemes = find_lexemes(&grammar);
@@ -795,11 +795,15 @@ fn test_lr1_parser_many1() {
         println!("  {}: {:?}", i, table[i]);
     }
     let mut parser = Lr1Parser::new(table);
-    let _ = parser.advance(&"A", Some(Box::new(1 as i32)));
+    let _ = parser.advance(&"A", Some(Box::new("1".to_owned())));
     let _ = parser.advance(&",", None);
-    let _ = parser.advance(&"A", Some(Box::new(2 as i32)));
+    let _ = parser.advance(&"A", Some(Box::new("2".to_owned())));
+    let _ = parser.advance(&",", None);
+    let _ = parser.advance(&"A", Some(Box::new("3".to_owned())));
+    let _ = parser.advance(&",", None);
+    let _ = parser.advance(&"A", Some(Box::new("4".to_owned())));
     let _ = parser.advance(&"$", None);
     let _ = parser.advance(&"$", None);
-    let x: (i32, i32) = *parser.get_value_stack_mut().pop().unwrap().downcast().ok().unwrap();
+    let x: String = *parser.get_value_stack_mut().pop().unwrap().downcast().ok().unwrap();
     println!("result {:?}", x);
 }
