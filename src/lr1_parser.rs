@@ -256,6 +256,13 @@ fn make_first_table<S>(grammar: &Grammar<S>, lexemes: &Vec<S>, empty: &HashSet<S
                 if lexemes.contains(part) {
                     again |= add_to_result(&mut result, Option::clone(&rule.name_op), S::clone(part));
                     break;
+                } else {
+                    let tmp = result.get(&Some(S::clone(part))).map(HashSet::clone);
+                    if let Some(tmp2) = tmp {
+                        for tmp3 in tmp2 {
+                            again |= add_to_result(&mut result, Option::clone(&rule.name_op), tmp3);
+                        }
+                    }
                 }
                 if !empty.contains(part) {
                     break;
@@ -543,7 +550,9 @@ where
     let empty = make_empty_set(&grammar, &lexemes);
     println!("empty: {:?}", empty);
     let first = make_first_table(&grammar, &lexemes, &empty);
+    println!("first: {:?}", first);
     let follow = make_follow_table(&grammar, &lexemes, &first);
+    println!("follow: {:?}", follow);
     let mut start_op: Option<Item<S>> = None;
     for rule_idx in 0..grammar.len() {
         let rule = &grammar[rule_idx];
