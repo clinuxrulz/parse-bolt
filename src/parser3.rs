@@ -54,7 +54,7 @@ impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
     where
         Err: From<String>,
         T: TokenClass<Result = TC> + 'static,
-        TC: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
+        TC: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display + std::fmt::Debug,
     {
         self.lr1_parser
             .advance(

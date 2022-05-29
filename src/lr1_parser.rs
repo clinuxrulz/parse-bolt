@@ -618,7 +618,7 @@ impl<S> Lr1Parser<S> {
 
     pub fn advance(&mut self, sym: &S, value_op: Option<Box<dyn Any>>) -> Result<bool, String>
     where
-        S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display,
+        S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display + std::fmt::Debug,
     {
         loop {
             // Debugging
@@ -632,6 +632,12 @@ impl<S> Lr1Parser<S> {
             let shift_op = state.shifts.get(sym).map(|x| *x);
             let reduces: Vec<Reduce<S>> = state.reduces.iter().map(Reduce::clone).filter(|reduce| reduce.lookahead == *sym).collect();
             if shift_op.is_some() && !reduces.is_empty() {
+                // Debug
+                {
+                    println!("sym: {}", sym);
+                    println!("shift: {}", shift_op.unwrap());
+                    println!("reduces: {:?}", reduces);
+                }
                 return Err("Shift/Reduce error.".to_owned());
             } else if reduces.len() > 1 {
                 return Err("Reduce/Reduce error.".to_owned());

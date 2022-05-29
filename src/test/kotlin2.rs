@@ -11,6 +11,7 @@ fn run_parser<A: std::fmt::Debug + 'static>(parser: &Parser<String, Token, KToke
     let source = Source::from_str(code);
     let source_cursor = SourceCursor::new(source);
     let mut token_stream = TokenStream::new(source_cursor);
+    let start_time = std::time::Instant::now();
     loop {
         match token_stream.next() {
             Ok((token, _byte_span)) => {
@@ -28,6 +29,7 @@ fn run_parser<A: std::fmt::Debug + 'static>(parser: &Parser<String, Token, KToke
     // TODO: FIXME: End of file token currently needs to be sent twice. Once for consumed, and next for lookahead for final rule match.
     runner.advance(Token::EOF)?;
     //
+    println!("Actual parsing took: {}ms", start_time.elapsed().as_millis());
     if runner.is_finished() {
         return Ok(runner.get_result());
     } else {

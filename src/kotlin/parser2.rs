@@ -92,7 +92,7 @@ impl KotlinParser {
                 .map(|(identifier, import_header_op)| {
                     data::ImportHeader {
                         identifier,
-                        import_header_op
+                        import_header_op,
                     }
                 });
         //
