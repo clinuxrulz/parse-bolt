@@ -50,6 +50,13 @@ pub struct ParserRunner<Err, T, TC, A> {
 }
 
 impl<Err, T, TC, A> ParserRunner<Err, T, TC, A> {
+    pub fn check_table(&self) -> bool
+    where
+        TC: Clone + PartialEq + Eq + std::hash::Hash,
+    {
+        self.lr1_parser.check_table()
+    }
+
     pub fn advance(&mut self, token: T) -> Result<bool, Err>
     where
         Err: From<String>,

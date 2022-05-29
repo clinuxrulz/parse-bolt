@@ -76,6 +76,23 @@ impl<S: Clone> Clone for Reduce<S> {
     }
 }
 
+impl<S: PartialEq> PartialEq for Reduce<S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.lookahead == other.lookahead &&
+        self.rule_name_op == other.rule_name_op &&
+        self.consume_count == other.consume_count &&
+        (match (&self.effect_op, &other.effect_op) {
+            (None, None) => true,
+            (Some(lhs), Some(rhs)) => {
+                Rc::as_ptr(lhs) == Rc::as_ptr(rhs)
+            }
+            _ => false,
+        })
+    }
+}
+
+impl<S: Eq> Eq for Reduce<S> {}
+
 impl<S: std::fmt::Debug> std::fmt::Debug for Reduce<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f
@@ -593,6 +610,38 @@ impl<S> Lr1Parser<S> {
         S: Clone + PartialEq + Eq + std::hash::Hash + PartialOrd + Ord + std::fmt::Display + std::fmt::Debug,
     {
         Lr1Parser::new(make_table(grammar, eof_sym))
+    }
+
+    pub fn check_table(&self) -> bool where S: Clone + PartialEq + Eq + std::hash::Hash {
+        let mut state_idx: usize = 0;
+        let mut passed = true;
+        let mut reduce_map: HashMap<S,Reduce<S>> = HashMap::new();
+        for state in &self.table {
+            for shift_key in state.shifts.keys() {
+                if state.reduces.iter().any(|reduce| reduce.lookahead == *shift_key) {
+                    println!("LrParser::check_table: Shift/Reduce Error at state {}", state_idx);
+                    passed = false;
+                }
+            }
+            reduce_map.clear();
+            for reduce in &state.reduces {
+                if let Some(reduce2) = reduce_map.get(&reduce.lookahead) {
+                    let mut tmp1 = reduce.clone();
+                    let mut tmp2 = reduce2.clone();
+                    tmp1.effect_op = None;
+                    tmp2.effect_op = None;
+                    if tmp1 != tmp2 {
+                        println!("LrParser::check_table: Reduce/Reduce Error at state {}", state_idx);
+                        passed = false;
+                        break;
+                    }
+                } else {
+                    reduce_map.insert(S::clone(&reduce.lookahead), reduce.clone());
+                }
+            }
+            state_idx += 1;
+        }
+        return passed;
     }
 
     fn push_control(&mut self, control: usize) {
