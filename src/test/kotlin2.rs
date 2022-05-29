@@ -7,7 +7,6 @@ use crate::parser3::Parser;
 
 fn run_parser<A: std::fmt::Debug + 'static>(parser: &Parser<String, Token, KTokenClass, A>, code: &str) -> Result<A, String> {
     let mut runner = parser.compile(&KTokenClass::EOF);
-    println!("runner: {:#?}", runner);
     let source = Source::from_str(code);
     let source_cursor = SourceCursor::new(source);
     let mut token_stream = TokenStream::new(source_cursor);
