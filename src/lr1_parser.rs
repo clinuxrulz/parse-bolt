@@ -6,9 +6,9 @@ use std::rc::Rc;
 // Reference: https://serokell.io/blog/how-to-implement-lr1-parser
 
 pub struct Rule<S> {
-    name_op: Option<S>,
-    parts: Vec<S>,
-    effect_op: Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>,
+    pub name_op: Option<S>,
+    pub parts: Vec<S>,
+    pub effect_op: Option<Rc<RefCell<dyn FnMut(&mut Vec<Box<dyn Any>>)>>>,
 }
 
 impl<S> Rule<S> {

@@ -351,7 +351,7 @@ impl<S> GrammarNameGen<S> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-enum RuleOrToken<S> {
+pub enum RuleOrToken<S> {
     Rule(usize),
     Token(S),
 }
