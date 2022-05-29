@@ -123,6 +123,15 @@ fn test_kotlin2_import_header2() {
             name_op: Some(crate::parser3::RuleOrToken::Rule(1)),
             parts: vec![
                 crate::parser3::RuleOrToken::Rule(2),
+                crate::parser3::RuleOrToken::Token(KTokenClass::As),
+                crate::parser3::RuleOrToken::Token(KTokenClass::Id),
+            ],
+            effect_op: None,
+        },
+        crate::lr1_parser::Rule {
+            name_op: Some(crate::parser3::RuleOrToken::Rule(1)),
+            parts: vec![
+                crate::parser3::RuleOrToken::Rule(2),
             ],
             effect_op: None,
         },
@@ -143,7 +152,7 @@ fn test_kotlin2_import_header2() {
             effect_op: None,
         },
     ];
-    let r = run_parser_2(&grammar, "import java.lang.String;");
+    let r = run_parser_2(&grammar, "import java.lang.String as JString;");
     if let Err(err) = r {
         println!("{}", err);
     }
