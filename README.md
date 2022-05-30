@@ -1,8 +1,10 @@
 # ⚡parse-bolt⚡ ...and Kotlin
 
 ## Status
-Discontinued for now in favour of LALRPOP. I mistakenly thought LALRPOP was LALR(1), when infact it was LR(1). LALRPOP is exactly what I need at the moment.
+Discontinued for now in favour of LALRPOP. I mistakenly thought LALRPOP was LALR(1), when in fact it was LR(1). LALRPOP is exactly what I need at the moment.
 
+
+## Description
 Changing direction a bit (and maybe project name will change later). Currently focused on a Kotlin Parser, plus Parser combinators for building other Parsers. The Kotlin grammar is battle testing the Parser combinators.
 
 This project makes use of parser combinators to define the grammar of your language in the source.
